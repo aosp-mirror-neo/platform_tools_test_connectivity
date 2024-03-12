@@ -73,7 +73,7 @@ class CellularRxPowerTest(base_test.BaseTestClass):
         self.keysight_test_app.destroy()
 
     def setup_test(self):
-        cputils.start_pixel_logger(self.dut)
+        self.dut_utils.start_pixel_logger()
 
     def on_retry(self):
         """Function to control test logic on retried tests.
@@ -102,7 +102,7 @@ class CellularRxPowerTest(base_test.BaseTestClass):
         self.testclass_results[self.current_test_name].setdefault(
             'log_path', [])
         self.testclass_results[self.current_test_name]['log_path'].append(
-            cputils.stop_pixel_logger(self.dut, log_path))
+            self.dut_utils.stop_pixel_logger(log_path))
         self.process_test_results()
 
     def process_test_results(self):

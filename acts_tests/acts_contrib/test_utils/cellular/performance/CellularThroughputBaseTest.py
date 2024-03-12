@@ -70,6 +70,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         """
         # Setup controllers
         self.dut = self.android_devices[-1]
+        self.dut_utils = cputils.DeviceUtils(self.dut, self.log)
         self.keysight_test_app = Keysight5GTestApp(
             self.user_params['Keysight5GTestApp'])
         if 'KeysightChamber' in self.user_params:
@@ -93,16 +94,13 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         self.user_params['retry_tests'] = [self.__class__.__name__]
 
         # Turn Airplane mode on
-        #asserts.assert_true(utils.force_airplane_mode(self.dut, True),
-        #                    'Can not turn on airplane mode.')
-        tel_utils.toggle_airplane_mode(self.log, self.dut, True)
+        self.dut_utils.toggle_airplane_mode(True, False)
+
 
     def teardown_class(self):
         self.log.info('Turning airplane mode on')
         try:
-            #asserts.assert_true(utils.force_airplane_mode(self.dut, True),
-            #                    'Can not turn on airplane mode.')
-            tel_utils.toggle_airplane_mode(self.log, self.dut, True)
+            self.dut_utils.toggle_airplane_mode(True, False)
         except:
             self.log.warning('Cannot perform teardown operations on DUT.')
         try:
@@ -115,21 +113,19 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
     def setup_test(self):
         self.retry_flag = False
         if self.testclass_params['enable_pixel_logs']:
-            cputils.start_pixel_logger(self.dut)
+            self.dut_utils.start_pixel_logger()
 
     def teardown_test(self):
         self.retry_flag = False
         self.log.info('Turing airplane mode on')
-        #asserts.assert_true(utils.force_airplane_mode(self.dut, True),
-        #                    'Can not turn on airplane mode.')
-        tel_utils.toggle_airplane_mode(self.log, self.dut, True)
+        self.dut_utils.toggle_airplane_mode(True, False)
         self.log.info('Turning all cells off.')
         self.keysight_test_app.turn_all_cells_off()
         log_path = os.path.join(
             context.get_current_context().get_full_output_path(), 'pixel_logs')
         os.makedirs(self.log_path, exist_ok=True)
         if self.testclass_params['enable_pixel_logs']:
-            cputils.stop_pixel_logger(self.dut, log_path)
+            self.dut_utils.stop_pixel_logger(log_path)
         self.process_testcase_results()
         self.pass_fail_check()
 
@@ -141,9 +137,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         and sets a retry_flag to enable further tweaking the test logic on
         second attempts.
         """
-        #asserts.assert_true(utils.force_airplane_mode(self.dut, True),
-        #                    'Can not turn on airplane mode.')
-        tel_utils.toggle_airplane_mode(self.log, self.dut, True)
+        self.dut_utils.toggle_airplane_mode(True, False)
         if self.keysight_test_app.get_cell_state('LTE', 'CELL1'):
             self.log.info('Turning LTE off.')
             self.keysight_test_app.set_cell_state('LTE', 'CELL1', 0)
@@ -417,7 +411,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
             num_apm_toggles = 10
             for idx in range(num_apm_toggles):
                 self.log.info('Turning off airplane mode')
-                cputils.toggle_airplane_mode(self.log, self.dut, False, False, idx)
+                self.dut_utils.toggle_airplane_mode(False, False, idx)
                 if self.keysight_test_app.wait_for_cell_status(
                         'LTE', 'CELL1', 'CONN', 10*(idx+1)):
                     self.log.info('Connected! Waiting for {} seconds.'.format(LONG_SLEEP))
@@ -425,7 +419,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                     break
                 elif idx < num_apm_toggles - 1:
                     self.log.info('Turning on airplane mode')
-                    cputils.toggle_airplane_mode(self.log, self.dut, True, False, idx)
+                    self.dut_utils.toggle_airplane_mode(True, False, idx)
                     time.sleep(MEDIUM_SLEEP)
                 else:
                     asserts.fail('DUT did not connect to LTE.')
@@ -456,7 +450,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
             num_apm_toggles = 10
             for idx in range(num_apm_toggles):
                 self.log.info('Turning off airplane mode now.')
-                cputils.toggle_airplane_mode(self.log, self.dut, False, False, idx)
+                self.dut_utils.toggle_airplane_mode(False, False, idx)
                 if self.keysight_test_app.wait_for_cell_status(
                         'NR5G', 'CELL1', 'CONN', 10*(idx+1)):
                     self.log.info('Connected! Waiting for {} seconds.'.format(LONG_SLEEP))
@@ -464,7 +458,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                     break
                 elif idx < num_apm_toggles - 1:
                     self.log.info('Turning on airplane mode now.')
-                    cputils.toggle_airplane_mode(self.log, self.dut, True, False, idx)
+                    self.dut_utils.toggle_airplane_mode(True, False, idx)
                     time.sleep(MEDIUM_SLEEP)
                 else:
                     asserts.fail('DUT did not connect to NR.')
@@ -535,15 +529,16 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
             result['cell_power'] = cell_power_array
             # Start BLER and throughput measurements
             current_throughput = self.run_single_throughput_measurement(testcase_params)
-            lte_rx_meas = cputils.get_rx_measurements(self.dut, 'LTE')
-            nr_rx_meas = cputils.get_rx_measurements(self.dut, 'NR5G')
+            lte_rx_meas = self.dut_utils.get_rx_measurements('LTE')
+            nr_rx_meas = self.dut_utils.get_rx_measurements('NR5G')
             result['throughput_measurements'] = current_throughput
-            result['lte_rx_measurements'] = lte_rx_meas
-            result['nr_rx_measurements'] = nr_rx_meas
-
             self.print_throughput_result(current_throughput)
-            self.log.info('LTE Rx Measurements: {}'.format(lte_rx_meas))
-            self.log.info('NR Rx Measurements: {}'.format(nr_rx_meas))
+
+            if self.testclass_params.get('log_rsrp_metrics', 1):
+                result['lte_rx_measurements'] = lte_rx_meas
+                result['nr_rx_measurements'] = nr_rx_meas
+                self.log.info('LTE Rx Measurements: {}'.format(lte_rx_meas))
+                self.log.info('NR Rx Measurements: {}'.format(nr_rx_meas))
 
             testcase_results['results'].append(result)
             if (('lte_bler_result' in result['throughput_measurements']
