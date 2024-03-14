@@ -55,6 +55,8 @@ versioned_deps = {
 
 # numpy and scipy version matrix per:
 # https://docs.scipy.org/doc/scipy/dev/toolchain.html
+if sys.version_info < (3, 10):
+    versioned_deps['numpy'] = 'numpy<2.0.0b1'
 if sys.version_info < (3, 9):
     versioned_deps['scipy'] = 'scipy<1.11'
 if sys.version_info < (3, 8):
