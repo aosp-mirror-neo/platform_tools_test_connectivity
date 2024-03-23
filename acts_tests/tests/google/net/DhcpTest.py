@@ -90,11 +90,8 @@ class DhcpTest(WifiBaseTest):
     def verify_dhcp_packet(self, packets, support_rapid_commit):
         for pkt in packets:
             if pkt.haslayer(DHCP):
-                if pkt[DHCP].options[0][1] == 1:
-                    send_option = RAPID_COMMIT_OPTION in pkt[DHCP].options
-                    asserts.assert_true(send_option == support_rapid_commit,
-                                        "Unexpected result in DHCP DISCOVER.")
-                elif pkt[DHCP].options[0][1] == 2:
+                # Remove dhcp discover checking since rapid commit enable by default(aosp/2943087).
+                if pkt[DHCP].options[0][1] == 2:
                     asserts.assert_true(not support_rapid_commit,
                                         "Should not find DHCP OFFER when RAPID_COMMIT_OPTION supported.")
                 elif pkt[DHCP].options[0][1] == 3:
