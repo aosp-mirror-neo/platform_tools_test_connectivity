@@ -46,7 +46,7 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
         self.tests = self.generate_test_cases(
             band_list=['N257', 'N258', 'N260', 'N261'],
             channel_list=['low', 'mid', 'high'],
-            dl_mcs_list=list(numpy.arange(27, -1, -1)),
+            dl_mcs_list=list(numpy.arange(28, -1, -1)),
             num_dl_cells_list=[1, 2, 4, 8],
             orientation_list=['A_Plane', 'B_Plane'],
             dl_mimo_config=2,
@@ -56,7 +56,7 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
             lte_ul_mcs_table='QAM256',
             lte_ul_mcs=4,
             schedule_scenario="FULL_TPUT",
-            schedule_slot_ratio= 80,
+            schedule_slot_ratio=80,
             force_contiguous_nr_channel=True,
             transform_precoding=0)
 
@@ -128,15 +128,12 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
             figure_list.append(plot)
         output_file_path = os.path.join(self.log_path, 'results.html')
         BokehFigure.save_figures(figure_list, output_file_path)
-
         """Saves CSV with all test results to enable comparison."""
         results_file_path = os.path.join(
             context.get_current_context().get_full_output_path(),
             'results.csv')
         with open(results_file_path, 'w', newline='') as csvfile:
-            field_names = [
-                'Test Name', 'Sensitivity'
-            ]
+            field_names = ['Test Name', 'Sensitivity']
             writer = csv.DictWriter(csvfile, fieldnames=field_names)
             writer.writeheader()
 
@@ -238,6 +235,7 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
             [nr_cell_sweep] *
             testcase_params['endc_combo_config']['nr_cell_count'])
         return cell_power_sweeps
+
     def generate_endc_combo_config(self, test_config):
         """Function to generate ENDC combo config from CSV test config
 
@@ -254,26 +252,19 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
         lte_scc_list = []
         endc_combo_config['lte_pcc'] = 1
         lte_cell = {
-            'cell_type':
-            'LTE',
-            'cell_number':
-            1,
-            'pcc':
-            1,
-            'band':
-            test_config['lte_band'],
-            'dl_bandwidth':
-            test_config['lte_bandwidth'],
-            'ul_enabled':
-            1,
-            'duplex_mode':
-            test_config['lte_duplex_mode'],
-            'dl_mimo_config':
-            'D{nss}U{nss}'.format(nss=test_config['lte_dl_mimo_config']),
-            'ul_mimo_config':
-            'D{nss}U{nss}'.format(nss=test_config['lte_ul_mimo_config']),
-            'transmission_mode':
-            'TM1'
+            'cell_type': 'LTE',
+            'cell_number': 1,
+            'pcc': 1,
+            'band': self.testclass_params['lte_anchor_band'],
+            'dl_bandwidth': self.testclass_params['lte_anchor_bandwidth'],
+            'ul_enabled': 1,
+            'duplex_mode': self.testclass_params['lte_anchor_duplex_mode'],
+            'dl_mimo_config': 'D{nss}U{nss}'.format(nss=1),
+            'ul_mimo_config': 'D{nss}U{nss}'.format(nss=1),
+            'transmission_mode': 'TM1',
+            'num_codewords': 1,
+            'num_layers': 1,
+            'dl_subframe_allocation': [1] * 10,
         }
         cell_config_list.append(lte_cell)
 
@@ -286,7 +277,8 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
                 'NR5G',
                 'cell_number':
                 nr_cell_idx,
-                'nr_cell_type': 'NSA',
+                'nr_cell_type':
+                'NSA',
                 'band':
                 test_config['nr_band'],
                 'duplex_mode':
@@ -325,19 +317,16 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
         return endc_combo_config
 
     def generate_test_cases(self, band_list, channel_list, dl_mcs_list,
-                            num_dl_cells_list, dl_mimo_config, orientation_list, **kwargs):
+                            num_dl_cells_list, dl_mimo_config,
+                            orientation_list, **kwargs):
         """Function that auto-generates test cases for a test class."""
         test_cases = []
         for orientation, band, channel, num_dl_cells, nr_dl_mcs in itertools.product(
-                orientation_list, band_list, channel_list, num_dl_cells_list, dl_mcs_list):
+                orientation_list, band_list, channel_list, num_dl_cells_list,
+                dl_mcs_list):
             if channel not in cputils.PCC_PRESET_MAPPING[band]:
                 continue
             test_config = {
-                'lte_band': 2,
-                'lte_bandwidth': 'BW20',
-                'lte_duplex_mode': 'FDD',
-                'lte_dl_mimo_config': 1,
-                'lte_ul_mimo_config': 1,
                 'nr_band': band,
                 'nr_bandwidth': 'BW100',
                 'nr_duplex_mode': 'TDD',
