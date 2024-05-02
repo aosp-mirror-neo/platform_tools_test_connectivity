@@ -28,6 +28,8 @@ from acts.controllers.utils_lib import ssh
 
 WifiEnums = wutils.WifiEnums
 SNIFFER_TIMEOUT = 6
+MEDIUM_SLEEP = 3
+SHORT_SLEEP = 1
 
 
 def create(configs):
@@ -47,6 +49,8 @@ def create(configs):
                     objs.append(TsharkSnifferOnUnix(config))
                 elif config['os'] == 'linux':
                     objs.append(TsharkSnifferOnLinux(config))
+                elif config['os'] == 'android':
+                    objs.append(TsharkSnifferOnAndroid(config))
                 else:
                     raise RuntimeError('Wrong sniffer config')
 
@@ -503,7 +507,7 @@ class TsharkSnifferOnLinux(TsharkSnifferBase):
         self._sniffer_server.run('sudo modprobe iwlwifi debug=0x1')
         # Wait for wifi config changes before trying to further configuration
         # e.g. setting monitor mode (which will fail if above is not complete)
-        time.sleep(1)
+        time.sleep(SHORT_SLEEP)
 
     def start_capture(self, network, chan, bw, duration=60):
         """Starts sniffer capture on the specified machine.
@@ -598,6 +602,85 @@ class TsharkSnifferOnLinux(TsharkSnifferBase):
         else:
             self._sniffer_server.run('sudo iw dev {} set freq {}'.format(
                 self.sniffer_interface, primary_freq))
+
+    def _configure_sniffer(self, network, chan, bw):
+        """ Connects to a wireless network using networksetup utility.
+
+        Args:
+            network: dictionary of network credentials; SSID and password.
+        """
+
+        self.log.debug('Setting monitor mode on Ch {}, bw {}'.format(chan, bw))
+        self.set_monitor_mode(chan, bw)
+
+
+class TsharkSnifferOnAndroid(TsharkSnifferBase):
+    """Class that implements Tshark based sniffer controller on Linux."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self._init_sniffer(config)
+        self.channel = None
+        self.bandwidth = None
+
+    def _init_sniffer(self, config):
+        """Function to configure interface for the first time"""
+        tshark_D_output = self._sniffer_server.run('tshark -D').stdout
+        self.sniffer_sn = config['serial']
+        time.sleep(MEDIUM_SLEEP)
+        if config['interface'] in tshark_D_output:
+            self.log.info("Target sniffer interface {} detected".format(
+                config['interface']))
+        else:
+            self.log.error('Target sniffer interface {} NOT detected'.format(
+                config['interface']))
+        # Wait for wifi config changes before trying to further configuration
+        # e.g. setting monitor mode (which will fail if above is not complete)
+        time.sleep(SHORT_SLEEP)
+
+    def start_capture(self, network, chan, bw, duration=60):
+        """Starts sniffer capture on the specified machine.
+
+        Args:
+            network: dict describing network to sniff on.
+            duration: duration of sniff.
+        """
+        # If sniffer doesnt support the channel, return
+        # Checking for existing sniffer processes
+        if self._started:
+            return
+
+        # Configure sniffer
+        self._configure_sniffer(network, chan, bw)
+        tshark_command = self._get_tshark_command(duration)
+        sniffer_command = self._get_sniffer_command(tshark_command)
+
+        # Starting sniffer capture by executing tshark command
+        self._run_tshark(sniffer_command)
+
+    def set_monitor_mode(self, chan, bw):
+        """Function to configure interface to monitor mode
+
+        Brings up the sniffer wireless interface in monitor mode and
+        tunes it to the appropriate channel and bandwidth
+
+        Args:
+            chan: primary channel (int) to tune the sniffer to
+            bw: bandwidth (int) to tune the sniffer to
+        """
+        if chan == self.channel and bw == self.bandwidth:
+            return
+
+        self.channel = chan
+        self.bandwidth = bw
+
+        self._sniffer_server.run('adb -s {} shell wl chanspec {}/{}'.format(
+            self.sniffer_sn, chan, bw))
+        time.sleep(SHORT_SLEEP)
+        sniffer_chanspec = self._sniffer_server.run(
+            'adb -s {} shell wl chanspec'.format(self.sniffer_sn)).stdout
+        time.sleep(SHORT_SLEEP)
+        self.log.info("Sniffer channel: {}".format(sniffer_chanspec))
 
     def _configure_sniffer(self, network, chan, bw):
         """ Connects to a wireless network using networksetup utility.
