@@ -174,6 +174,7 @@ def get_connected_rssi(dut,
          ('bssid', []), ('ssid', []), ('frequency', []),
          ('signal_poll_rssi', empty_rssi_result()),
          ('signal_poll_avg_rssi', empty_rssi_result()),
+         ('reported_rssi', empty_rssi_result()),
          ('chain_0_rssi', empty_rssi_result()),
          ('chain_1_rssi', empty_rssi_result())])
 
@@ -219,6 +220,7 @@ def get_connected_rssi(dut,
         if interface == 'wlan0':
             try:
                 per_chain_rssi = dut.adb.shell('wl phy_rssi_ant')
+                reported_rssi = int(dut.adb.shell('wl rssi'))
                 chain_0_rssi = re.search(
                     r'rssi\[0\]\s(?P<chain_0_rssi>[0-9\-]*)', per_chain_rssi)
                 if chain_0_rssi:
@@ -234,8 +236,10 @@ def get_connected_rssi(dut,
             except:
                 chain_0_rssi = RSSI_ERROR_VAL
                 chain_1_rssi = RSSI_ERROR_VAL
+                reported_rssi = RSSI_ERROR_VAL
             connected_rssi['chain_0_rssi']['data'].append(chain_0_rssi)
             connected_rssi['chain_1_rssi']['data'].append(chain_1_rssi)
+            connected_rssi['reported_rssi']['data'].append(reported_rssi)
             combined_rssi = math.pow(10, chain_0_rssi / 10) + math.pow(
                 10, chain_1_rssi / 10)
             combined_rssi = 10 * math.log10(combined_rssi)
