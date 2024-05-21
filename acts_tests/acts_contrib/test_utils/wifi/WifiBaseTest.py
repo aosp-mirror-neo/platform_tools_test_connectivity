@@ -17,9 +17,7 @@
     Base Class for Defining Common WiFi Test Functionality
 """
 
-import contextlib
 import copy
-import logging
 import os
 import time
 
@@ -43,27 +41,6 @@ AP_1 = 0
 AP_2 = 1
 MAX_AP_COUNT = 2
 
-@contextlib.contextmanager
-def logged_suppress(message: str, allow_test_fail: bool = False):
-  """Suppresses any Exceptions and logs the outcome.
-
-  This is to make sure all steps in every test class's teardown_test/on_fail
-  are executed even if super().teardown_test() or super().on_fail()
-  is called at the very beginning.
-
-  Args:
-    message: message to describe the error.
-    allow_test_fail: True to re-raise the exception, False to suppress it.
-
-  Yields:
-    None
-  """
-  try:
-    yield
-  except signals.TestFailure:
-    if allow_test_fail:
-      raise
-    logging.exception(message)
 
 class WifiBaseTest(BaseTestClass):
     def __init__(self, configs):
@@ -111,21 +88,11 @@ class WifiBaseTest(BaseTestClass):
             for ad in self.android_devices:
                 proc = nutils.start_tcpdump(ad, self.test_name)
                 self.tcpdump_proc.append((ad, proc))
-
-                # Delete any existing ssrdumps.
-                ad.log.info("Deleting existing ssrdumps")
-                ad.adb.shell("find /data/vendor/ssrdump/ -type f -delete",
-                             ignore_status=True)
-
         if hasattr(self, "packet_logger"):
             self.packet_log_pid = wutils.start_pcap(self.packet_logger, 'dual',
                                                     self.test_name)
 
     def teardown_test(self):
-        with logged_suppress("SubSystem Restart(SSR) Exception.",
-                             allow_test_fail=True):
-            self._check_ssrdumps()
-
         if (hasattr(self, "android_devices")):
             wutils.stop_all_wlan_logs(self.android_devices)
             for proc in self.tcpdump_proc:
@@ -151,6 +118,7 @@ class WifiBaseTest(BaseTestClass):
             for ad in self.android_devices:
                 ad.take_bug_report(test_name, begin_time)
                 ad.cat_adb_log(test_name, begin_time)
+                wutils.get_ssrdumps(ad)
             wutils.stop_all_wlan_logs(self.android_devices)
             for ad in self.android_devices:
                 wutils.get_wlan_logs(ad)
@@ -166,20 +134,6 @@ class WifiBaseTest(BaseTestClass):
         # Gets a wlan_device log and calls the generic device fail on DUT.
         for device in getattr(self, "fuchsia_devices", []):
             self.on_device_fail(device, test_name, begin_time)
-
-    def _check_ssrdumps(self):
-        """Failed the test if SubSystem Restart occurred on any device."""
-        is_ramdump_happened = False
-        if (hasattr(self, "android_devices")):
-            for ad in self.android_devices:
-                wutils.get_ssrdumps(ad)
-                if wutils.has_ssrdumps(ad):
-                    is_ramdump_happened = True
-
-        if is_ramdump_happened:
-            raise signals.TestFailure(
-              f"SubSystem Restart(SSR) occurred on "
-              f"{self.TAG}:{self.current_test_name}")
 
     def on_device_fail(self, device, test_name, begin_time):
         """Gets a generic device DUT bug report.

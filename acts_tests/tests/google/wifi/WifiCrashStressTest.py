@@ -74,10 +74,6 @@ class WifiCrashStressTest(WifiBaseTest):
         wutils.wifi_toggle_state(self.dut_client, True)
 
     def teardown_test(self):
-        # Deletes all ssrdump files in every DUTs.
-        for ad in self.android_devices:
-            ad.adb.shell("find /data/vendor/ssrdump/ -type f -delete",
-                         ignore_status=True)
         super().teardown_test()
         if self.dut.droid.wifiIsApEnabled():
             wutils.stop_wifi_tethering(self.dut)

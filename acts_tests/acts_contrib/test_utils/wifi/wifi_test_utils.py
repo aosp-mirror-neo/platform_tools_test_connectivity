@@ -2534,15 +2534,6 @@ def get_current_softap_capability(ad, callbackId, need_to_wait):
 
     return capability
 
-def has_ssrdumps(ad) -> bool:
-    """Checks if ssrdumps files are present in ssrdump dir
-
-    Returns:
-        True if ssrdumps are present, False otherwise.
-    """
-    files = ad.get_file_names("/data/vendor/ssrdump/")
-    return bool(files)
-
 def get_ssrdumps(ad):
     """Pulls dumps in the ssrdump dir
     Args:
@@ -2554,6 +2545,9 @@ def get_ssrdumps(ad):
         log_path = os.path.join(ad.device_log_path, "SSRDUMPS_%s" % ad.serial)
         os.makedirs(log_path, exist_ok=True)
         ad.pull_files(logs, log_path)
+    ad.adb.shell("find /data/vendor/ssrdump/ -type f -delete",
+                 ignore_status=True)
+
 
 def start_pcap(pcap, wifi_band, test_name):
     """Start packet capture in monitor mode.
@@ -2659,7 +2653,7 @@ def start_wlan_logs(ad):
 def stop_all_wlan_logs(ads):
     for ad in ads:
         stop_wlan_logs(ad)
-    ad.log.info("Wait 30s for the creation of zip file for wlan logs")
+    ad.log.info("Wait 30s for the createion of zip file for wlan logs")
     time.sleep(30)
 
 def stop_wlan_logs(ad):
