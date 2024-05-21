@@ -572,6 +572,12 @@ class WifiRvrTest(base_test.BaseTestClass):
             self.sta_dut.droid.wakeLockAcquireDim()
         else:
             self.sta_dut.go_to_sleep()
+        # Enable Tune Code
+        band = self.access_point.band_lookup_by_channel(testcase_params['channel'])
+        if 'tune_code' in self.testbed_params:
+            if int(self.testbed_params['tune_code']['manual_tune_code']):
+                self.log.info('Tune Code forcing enabled in config file')
+                wputils.write_antenna_tune_code(self.sta_dut, self.testbed_params['tune_code'][band])
         if (wputils.validate_network(self.sta_dut,
                                      testcase_params['test_network']['SSID'])
                 and not self.testclass_params.get('force_reconnect', 0)):

@@ -124,6 +124,51 @@ def extract_sub_dict(full_dict, fields):
         (field, full_dict[field]) for field in fields)
     return sub_dict
 
+def write_antenna_tune_code(dut, tune_code):
+    flag_tune_code_forcing_on = 0
+    # Use AT Command file to enable tune code forcing 
+    for n_enable in range(5):
+        logging.debug('{}-th Enabling modem test mode'.format(n_enable))
+        try:
+            at_lmodetest_output = dut.adb.shell("modem_cmd raw AT+LMODETEST")
+            time.sleep(SHORT_SLEEP)
+            logging.debug('Command AT+LMODETEST output: {}'.format(at_lmodetest_output))
+        except:
+            logging.error('{}-th Failed modem test mode AT+LMODETEST'.format(n_enable))
+            continue
+        try:
+            at_lrffinalstart_output = dut.adb.shell("modem_cmd raw AT+LRFFINALSTART")
+            time.sleep(SHORT_SLEEP)
+            logging.debug('Command AT+LRFFINALSTART output: {}'.format(at_lrffinalstart_output))
+            if "+LRFFINALSTART:0" in at_lrffinalstart_output and not "ERROR" in at_lrffinalstart_output:
+                flag_tune_code_forcing_on = 1
+                logging.info('Enable modem test mode SUCCESSFUL')
+                break
+        except:
+            logging.error('{}-th Failed modem test mode AT+LRFFINALSTART'.format(n_enable))
+            continue
+    if not flag_tune_code_forcing_on:
+        raise RuntimeError("AT Command File Not set up")
+    at_cmd_output = dut.adb.shell("modem_cmd raw " + tune_code['tune_code_cmd'])
+    logging.debug('Write Tune Code: {}'.format("modem_cmd raw " + tune_code['tune_code_cmd']))
+    flag_tc_reg_correct = True
+    # Check tune code register values
+    for tune_code_register_key in tune_code['tune_code_registers'].keys():
+        try:
+            at_tc_reg_output = dut.adb.shell("modem_cmd raw AT+MIPIREAD={}".format(tune_code_register_key))
+            time.sleep(SHORT_SLEEP)
+        except:
+            pass
+        if "+MIPIREAD:"+tune_code['tune_code_registers'][tune_code_register_key].lower() in at_tc_reg_output:
+            logging.info('Forced tune code register {} value matches expectation: {}'.format(tune_code_register_key, tune_code['tune_code_registers'][tune_code_register_key]))
+        else:
+            logging.warning('Expected tune code register {} value: {}'.format(tune_code_register_key, tune_code['tune_code_registers'][tune_code_register_key]))
+            logging.warning('tune code register value is set to {}'.format(at_tc_reg_output))
+            flag_tc_reg_correct = False
+    if flag_tc_reg_correct:
+        return True
+    else:
+        raise RuntimeError("Enable modem test mode SUCCESSFUL, but register values NOT correct")
 
 # Miscellaneous Wifi Utilities
 def check_skip_conditions(testcase_params, dut, access_point,
