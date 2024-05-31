@@ -1435,6 +1435,9 @@ class AndroidDevice:
             return
         self.stop_services()
         self.log.info("Rebooting")
+        # Send ACTION_SHUTDOWN broadcast and wait for registered services
+        self.adb.shell("am broadcast -a android.intent.action.ACTION_SHUTDOWN")
+        time.sleep(5)
         self.adb.reboot()
 
         timeout_start = time.time()
