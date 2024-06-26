@@ -71,7 +71,7 @@ class WifiNetworkSuggestionTest(WifiBaseTest):
             "open_network", "reference_networks", "hidden_networks",
             "radius_conf_2g", "radius_conf_5g", "ca_cert", "eap_identity",
             "eap_password", "passpoint_networks", "domain_suffix_match",
-            "wifi6_models"
+            "wifi6_models", "google_pixel_watch_models"
         ]
         self.unpack_userparams(opt_param_names=opt_param, )
 
@@ -103,9 +103,12 @@ class WifiNetworkSuggestionTest(WifiBaseTest):
             self.passpoint_network[WifiEnums.SSID_KEY] = \
                 self.passpoint_networks[BOINGO][WifiEnums.SSID_KEY][0]
         self.dut.droid.wifiRemoveNetworkSuggestions([])
-        self.dut.adb.shell(
-            "pm disable com.google.android.apps.carrier.carrierwifi",
-            ignore_status=True)
+        if "google_pixel_watch_models" in self.user_params:
+            if not self.dut.model in \
+                self.user_params["google_pixel_watch_models"]:
+                self.dut.adb.shell(
+                    "pm disable com.google.android.apps.carrier.carrierwifi",
+                    ignore_status=True)
 
     def setup_test(self):
         super().setup_test()
@@ -141,8 +144,11 @@ class WifiNetworkSuggestionTest(WifiBaseTest):
             str(self.dut.droid.telephonyGetSimCarrierId()))
 
     def teardown_class(self):
-        self.dut.adb.shell(
-            "pm enable com.google.android.apps.carrier.carrierwifi")
+        if "google_pixel_watch_models" in self.user_params:
+            if not self.dut.model in \
+                self.user_params["google_pixel_watch_models"]:
+                self.dut.adb.shell(
+                    "pm enable com.google.android.apps.carrier.carrierwifi")
         if "AccessPoint" in self.user_params:
             del self.user_params["reference_networks"]
             del self.user_params["open_network"]
@@ -256,6 +262,11 @@ class WifiNetworkSuggestionTest(WifiBaseTest):
         # Reboot and wait for connection back to the same suggestion.
         self.dut.reboot()
         time.sleep(DEFAULT_TIMEOUT)
+
+        if "google_pixel_watch_models" in self.user_params:
+            if self.dut.model in \
+                self.user_params["google_pixel_watch_models"]:
+                self.dut.unlock_screen()
 
         wutils.wait_for_connect(self.dut, wifi_network[WifiEnums.SSID_KEY])
         wutils.verify_11ax_wifi_connection(self.dut, self.wifi6_models,
