@@ -65,7 +65,8 @@ class WifiIOTConnectionTest(WifiBaseTest):
     def teardown_test(self):
         self.dut.droid.wakeLockRelease()
         self.dut.droid.goToSleepNow()
-        wutils.stop_pcap(self.packet_capture, self.pcap_procs, False)
+        if hasattr(self, 'packet_capture'):
+            wutils.stop_pcap(self.packet_capture, self.pcap_procs, False)
 
     def on_fail(self, test_name, begin_time):
         self.dut.take_bug_report(test_name, begin_time)
