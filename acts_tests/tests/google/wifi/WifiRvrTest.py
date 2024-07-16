@@ -515,6 +515,7 @@ class WifiRvrTest(base_test.BaseTestClass):
         # Compile test result and meta data
         rvr_result = collections.OrderedDict()
         rvr_result['test_name'] = self.current_test_name
+        rvr_result['phone_fold_status'] = wputils.check_fold_status(self.sta_dut)
         rvr_result['testcase_params'] = testcase_params.copy()
         rvr_result['ap_settings'] = self.access_point.ap_settings.copy()
         rvr_result['fixed_attenuation'] = self.testbed_params[

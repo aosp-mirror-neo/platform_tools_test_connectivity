@@ -647,6 +647,20 @@ def empty_rssi_result():
     return collections.OrderedDict([('data', []), ('mean', float('nan')),
                                     ('stdev', float('nan'))])
 
+# Phone fold status
+def check_fold_status(dut):
+    fold_status = 'NA'
+    try:
+        fold_status_str = dut.adb.shell('sensor_test sample -s 65547.0 -n1',timeout=2)
+    except:
+        return fold_status
+    if 'Data: 1.000000' in fold_status_str:
+        fold_status = 'folded'
+    elif 'Data: 0.000000' in fold_status_str:
+        fold_status = 'unfolded'
+    else:
+        fold_status = 'NA'
+    return fold_status
 
 @nonblocking
 def get_connected_rssi_nb(dut,
