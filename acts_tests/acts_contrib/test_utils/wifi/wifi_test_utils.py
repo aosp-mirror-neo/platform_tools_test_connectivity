@@ -14,7 +14,6 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-import ipaddress
 import logging
 import os
 import re
@@ -24,7 +23,6 @@ import subprocess
 import time
 
 from retry import retry
-from typing import Optional, Union
 
 from collections import namedtuple
 from enum import IntEnum
@@ -35,6 +33,8 @@ from acts import context
 from acts import signals
 from acts import utils
 from acts.controllers import attenuator
+from acts.controllers.adb_lib.error import AdbCommandError
+from acts.controllers.android_device import AndroidDevice
 from acts.controllers.ap_lib import hostapd_security
 from acts.controllers.ap_lib import hostapd_ap_preset
 from acts.controllers.ap_lib.hostapd_constants import BAND_2G
@@ -3041,20 +3041,17 @@ def kill_iperf3_server_by_port(port: str):
     except subprocess.CalledProcessError:
         logging.info("Error executing shell command with subprocess.")
 
-def get_host_public_ipv4_address() -> Optional[str]:
-  """Retrieves the host's public IPv4 address using the ifconfig command.
+def get_host_iperf_ipv4_address(dut: AndroidDevice) -> str | None:
+  """Gets the host's iPerf IPv4 address.
 
-  This function tries to extract the host's public IPv4 address by parsing
-  the output of the ifconfig command. It will filter out private IP addresses
-  (e.g., 10.0.0.0/8, 172.16.0.0/12, and 192.168.0.0/16).
+  This function tries to get the host's iPerf IPv4 address by finding the first
+  IPv4 address for iperf server that can be pinged.
+
+  Args:
+    dut: The Android device.
 
   Returns:
-    str: The public IPv4 address, if found.
-    None: If no public IPv4 address is found or in case of errors.
-
-  Raises:
-    May print errors related to executing ifconfig or parsing the IPs, but
-    exceptions are handled and won't be raised beyond the function.
+    The host's iPerf IPv4 address, if found; None, otherwise.
   """
   try:
     # Run ifconfig command and get its output
@@ -3078,14 +3075,17 @@ def get_host_public_ipv4_address() -> Optional[str]:
   # Return the first public IP address found
   for ip_str in matches:
     try:
-      ip = ipaddress.ip_address(ip_str)
-      if not ip.is_private:
-        return ip_str
-    except ValueError:
-      logging.info("Invalid IP address format: %s", ip_str)
+      ping_result = dut.adb.shell("ping -c 6 {}".format(ip_str))
+      dut.log.info("Host IP ping result: %s" % ping_result)
+      if "100% packet loss" in ping_result:
+        logging.warning("Ping host IP %s results: %s", ip_str, ping_result)
+        continue
+      return ip_str
+    except AdbCommandError as e:
+      logging.warning("Failed to ping host IP %s: %s", ip_str, e)
       continue
 
-  # Return None if no public IP is found
+  # Return None if no suitable host iPerf server IP found
   return None
 
 def get_iperf_server_port():
