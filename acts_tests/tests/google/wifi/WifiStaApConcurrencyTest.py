@@ -74,10 +74,10 @@ class WifiStaApConcurrencyTest(WifiBaseTest):
         self.unpack_userparams(req_param_names=req_params,)
 
         # Use local host as iperf server.
+        self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
         asserts.assert_true(
-          wutils.get_host_public_ipv4_address(),
-          "The host has no public ip address")
-        self.iperf_server_address = wutils.get_host_public_ipv4_address()
+          self.iperf_server_address,
+          "The host has no suitable IPv4 address for iperf server.")
         self.iperf_server_port = wutils.get_iperf_server_port()
         try:
           self.iperf_server = IPerfServer(self.iperf_server_port)

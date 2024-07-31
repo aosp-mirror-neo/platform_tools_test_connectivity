@@ -71,7 +71,7 @@ class WifiStressTest(WifiBaseTest):
         wutils.wifi_test_device_init(self.dut)
         req_params = []
         opt_param = [
-            "open_network", "reference_networks", "iperf_server_address",
+            "open_network", "reference_networks",
             "stress_count", "stress_hours", "attn_vals", "pno_interval",
         ]
         self.unpack_userparams(req_param_names=req_params,
@@ -93,10 +93,10 @@ class WifiStressTest(WifiBaseTest):
         self.networks = [self.wpa_2g, self.wpa_5g, self.open_2g, self.open_5g]
 
         # Use local host as iperf server.
+        self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
         asserts.assert_true(
-          wutils.get_host_public_ipv4_address(),
-          "The host has no public ip address")
-        self.iperf_server_address = wutils.get_host_public_ipv4_address()
+          self.iperf_server_address,
+          "The host has no suitable IPv4 address for iperf server.")
         self.iperf_server_port = wutils.get_iperf_server_port()
         try:
           self.iperf_server = IPerfServer(self.iperf_server_port)
