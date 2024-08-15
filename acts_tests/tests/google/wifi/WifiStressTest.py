@@ -92,11 +92,6 @@ class WifiStressTest(WifiBaseTest):
         self.open_5g = self.open_network[0]["5g"]
         self.networks = [self.wpa_2g, self.wpa_5g, self.open_2g, self.open_5g]
 
-        # Use local host as iperf server.
-        self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
-        asserts.assert_true(
-          self.iperf_server_address,
-          "The host has no suitable IPv4 address for iperf server.")
         self.iperf_server_port = wutils.get_iperf_server_port()
         try:
           self.iperf_server = IPerfServer(self.iperf_server_port)
@@ -250,6 +245,11 @@ class WifiStressTest(WifiBaseTest):
 
     def run_long_traffic(self, sec, args, q):
         try:
+            # Use local host as iperf server.
+            self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
+            asserts.assert_true(self.iperf_server_address, "The host has no "
+                                "available IPv4 address for iperf client to "
+                                "connect to.")
             # Start IPerf traffic
             self.log.info("Running iperf client {}".format(args))
             result, data = self.dut.run_iperf_client(self.iperf_server_address,
@@ -335,6 +335,11 @@ class WifiStressTest(WifiBaseTest):
                 asserts.assert_true(net_id != -1,
                                     "Add network %r failed" % self.wpa_5g)
                 self.scan_and_connect_by_id(self.wpa_5g, net_id)
+                # Use local host as iperf server.
+                self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
+                asserts.assert_true(self.iperf_server_address, "The host has no "
+                                "available IPv4 address for iperf client to "
+                                "connect to.")
                 # Start IPerf traffic from phone to server.
                 # Upload data for 10s.
                 args = "-p {} -t {}".format(self.iperf_server_port, 10)
@@ -661,6 +666,11 @@ class WifiStressTest(WifiBaseTest):
                 self.log.debug("WiFi was enabled on the device in %s s." %
                                startup_time)
                 time.sleep(DEFAULT_TIMEOUT)
+                # Use local host as iperf server.
+                self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
+                asserts.assert_true(self.iperf_server_address, "The host has no "
+                                "available IPv4 address for iperf client to "
+                                "connect to.")
                 # Start IPerf traffic from phone to server.
                 # Upload data for 10s.
                 args = "-p {} -t {}".format(self.iperf_server_port, 10)

@@ -14,6 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import ipaddress
 import logging
 import os
 import re
@@ -3075,14 +3076,22 @@ def get_host_iperf_ipv4_address(dut: AndroidDevice) -> str | None:
   # Return the first public IP address found
   for ip_str in matches:
     try:
-      ping_result = dut.adb.shell("ping -c 6 {}".format(ip_str))
+      ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+      logging.warning("Invalid IP address: %s", str(ip))
+      continue
+    if ip.is_loopback:
+      logging.info("Skip loopback IP address: %s", str(ip))
+      continue
+    try:
+      ping_result = dut.adb.shell("ping -c 6 {}".format(str(ip)))
       dut.log.info("Host IP ping result: %s" % ping_result)
       if "100% packet loss" in ping_result:
-        logging.warning("Ping host IP %s results: %s", ip_str, ping_result)
+        logging.warning("Ping host IP %s results: %s", str(ip), ping_result)
         continue
       return ip_str
     except AdbCommandError as e:
-      logging.warning("Failed to ping host IP %s: %s", ip_str, e)
+      logging.warning("Failed to ping host IP %s: %s", str(ip), e)
       continue
 
   # Return None if no suitable host iPerf server IP found

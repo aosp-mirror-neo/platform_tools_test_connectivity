@@ -78,11 +78,6 @@ class WifiSoftApAcsTest(WifiBaseTest):
         }
         self.pcap_procs = None
 
-        # Use local host as iperf server.
-        self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
-        asserts.assert_true(
-          self.iperf_server_address,
-          "The host has no suitable IPv4 address for iperf server.")
         self.iperf_server_port = wutils.get_iperf_server_port()
         try:
           self.iperf_server = IPerfServer(self.iperf_server_port)
@@ -135,6 +130,11 @@ class WifiSoftApAcsTest(WifiBaseTest):
         """
         network, ad = params
         SSID = network[WifiEnums.SSID_KEY]
+        # Use local host as iperf server.
+        self.iperf_server_address = wutils.get_host_iperf_ipv4_address(ad)
+        asserts.assert_true(self.iperf_server_address, "The host has no "
+                                "available IPv4 address for iperf client to "
+                                "connect to.")
         self.log.info("Starting iperf traffic through {}".format(SSID))
         port_arg = "-p {} -t {}".format(self.iperf_server_port, 3)
         success, data = ad.run_iperf_client(self.iperf_server_address,

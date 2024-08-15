@@ -95,11 +95,6 @@ class WifiManagerTest(WifiBaseTest):
         self.open_network_2g = self.open_network[0]["2g"]
         self.open_network_5g = self.open_network[0]["5g"]
 
-        # Use local host as iperf server.
-        self.iperf_server_address = wutils.get_host_iperf_ipv4_address(self.dut)
-        asserts.assert_true(
-          self.iperf_server_address,
-          "The host has no suitable IPv4 address for iperf server.")
         self.iperf_server_port = wutils.get_iperf_server_port()
         try:
           self.iperf_server = IPerfServer(self.iperf_server_port)
@@ -281,6 +276,11 @@ class WifiManagerTest(WifiBaseTest):
         wait_time = 5
         network, ad = params
         SSID = network[WifiEnums.SSID_KEY]
+        # Use local host as iperf server.
+        self.iperf_server_address = wutils.get_host_iperf_ipv4_address(ad)
+        asserts.assert_true(self.iperf_server_address, "The host has no "
+                                "available IPv4 address for iperf client to "
+                                "connect to.")
         self.log.info("Starting iperf traffic through {}".format(SSID))
         time.sleep(wait_time)
         port_arg = "-p {}".format(self.iperf_server_port)
