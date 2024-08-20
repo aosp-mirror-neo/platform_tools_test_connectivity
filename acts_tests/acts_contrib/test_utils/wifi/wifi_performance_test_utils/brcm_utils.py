@@ -443,6 +443,11 @@ class LinkLayerStats():
     TX_PER_REGEX = re.compile(
         r'(?P<mode>\S+) PER\s+:\s*(?P<nss1>[0-9, ,(,),%]*)'
         '\n\s*:?\s*(?P<nss2>[0-9, ,(,),%]*)')
+    TX_BW = re.compile(
+        r'TX BW[\s+]?:\s*(?P<tx_bw>[0-9, ,(,),%]*)')
+    RX_BW = re.compile(
+        r'RX BW\s+:\s*(?P<rx_bw>[0-9, ,(,),%]*)')
+    TXRX_BW_REGEX = re.compile(r'(?P<count>[0-9]+)\((?P<percent>[0-9]+)%\)')
     RX_GOOD_FCS_REGEX = re.compile(r'goodfcs (?P<rx_good_fcs>[0-9]*)')
     RX_BAD_FCS_REGEX = re.compile(r'rxbadfcs (?P<rx_bad_fcs>[0-9]*)')
     RX_AGG_REGEX = re.compile(r'rxmpduperampdu (?P<aggregation>[0-9]*)')
@@ -455,7 +460,8 @@ class LinkLayerStats():
     MCS_ID = collections.namedtuple(
         'mcs_id', ['mode', 'num_streams', 'bandwidth', 'mcs', 'gi'])
     MODE_MAP = {'0': '11a/g', '1': '11b', '2': '11n', '3': '11ac'}
-    BW_MAP = {'0': 20, '1': 40, '2': 80}
+    BW_MAP = {'0': 20, '1': 40, '2': 80, '3': 160}
+
 
     def __init__(self, dut, llstats_enabled=True):
         self.dut = dut
@@ -591,6 +597,75 @@ class LinkLayerStats():
 
         return mpdu_stats
 
+    def _parse_bw_stats(self, llstats_output):
+        tx_bw_match_iter = re.finditer(self.TX_BW, llstats_output)
+        rx_bw_match_iter = re.finditer(self.RX_BW, llstats_output)
+        bw_stats = {}
+        for rx_bw_match, tx_bw_match, in zip(rx_bw_match_iter, tx_bw_match_iter):
+            rx_bw_cnt_iter = re.finditer(self.TXRX_BW_REGEX, rx_bw_match.group('rx_bw'))
+            tx_bw_cnt_iter = re.finditer(self.TXRX_BW_REGEX, tx_bw_match.group('tx_bw'))
+            tx_phy_bw_weight_sum = 0
+            rx_phy_bw_weight_sum = 0
+            tx_bw_adjust_cnt = 0
+            rx_bw_adjust_cnt = 0
+            rx_common_bw = self.bandwidth
+            tx_common_bw = self.bandwidth
+            rx_common_bw_pct = 0
+            tx_common_bw_pct = 0
+            for bw_id, (rx_bw_stats, tx_bw_stats) in enumerate(
+                              itertools.zip_longest(rx_bw_cnt_iter, tx_bw_cnt_iter)):
+                current_bw = self.BW_MAP[str(bw_id)]
+                current_bw_stats = collections.OrderedDict(
+                    txbwcnt = int(tx_bw_stats.group('count'))
+                    if tx_bw_stats else 0,
+                    txbwpct = int(tx_bw_stats.group('percent'))
+                    if tx_bw_stats else 0,
+                    rxbwcnt = int(rx_bw_stats.group('count'))
+                    if rx_bw_stats else 0,
+                    rxbwpct = int(rx_bw_stats.group('percent'))
+                    if rx_bw_stats else 0,
+                    bw=current_bw)
+                if current_bw_stats['rxbwpct'] > rx_common_bw_pct:
+                    rx_common_bw_pct = current_bw_stats['rxbwpct']
+                    rx_common_bw = current_bw
+                if current_bw_stats['txbwpct'] > tx_common_bw_pct:
+                    tx_common_bw_pct = current_bw_stats['txbwpct']
+                    tx_common_bw = current_bw
+                bw_stats[current_bw] = current_bw_stats
+                if int(current_bw) != int(self.bandwidth) and current_bw_stats['txbwpct'] > 0:
+                    tx_bw_adjust_cnt = tx_bw_adjust_cnt + 1
+                if int(current_bw) != int(self.bandwidth) and current_bw_stats['rxbwpct'] > 0:
+                    rx_bw_adjust_cnt = rx_bw_adjust_cnt + 1
+                if float(current_bw) <= float(self.bandwidth):
+                    tx_phy_bw_weight_sum = tx_phy_bw_weight_sum + (float(current_bw)/float(self.bandwidth)) * (float(current_bw_stats['txbwpct'])/float(100))
+                    rx_phy_bw_weight_sum = rx_phy_bw_weight_sum + (float(current_bw)/float(self.bandwidth)) * (float(current_bw_stats['rxbwpct'])/float(100))
+            if tx_phy_bw_weight_sum != 0:
+                bw_stats['tx_phy_bw_weight'] = float(tx_phy_bw_weight_sum)
+            else:
+                bw_stats['tx_phy_bw_weight'] = 1
+            if rx_phy_bw_weight_sum != 0:
+                bw_stats['rx_phy_bw_weight'] = float(rx_phy_bw_weight_sum)
+            else:
+                bw_stats['rx_phy_bw_weight'] = 1
+            if tx_bw_adjust_cnt > 0:
+                bw_stats['tx_bw_adjusted_flag'] = True
+                bw_stats['tx_common_bw'] = tx_common_bw
+                bw_stats['tx_common_bw_pct'] = tx_common_bw_pct
+            else:
+                bw_stats['tx_bw_adjusted_flag'] = False
+                bw_stats['tx_common_bw'] = self.bandwidth
+                bw_stats['tx_common_bw_pct'] = 100
+            if rx_bw_adjust_cnt > 0:
+                bw_stats['rx_bw_adjusted_flag'] = True
+                bw_stats['rx_common_bw'] = rx_common_bw
+                bw_stats['rx_common_bw_pct'] = rx_common_bw_pct
+            else:
+                bw_stats['rx_bw_adjusted_flag'] = False
+                bw_stats['rx_common_bw'] = self.bandwidth
+                bw_stats['rx_common_bw_pct'] = 100
+        return bw_stats
+
+
     def _generate_stats_summary(self, llstats_dict):
         llstats_summary = collections.OrderedDict(common_tx_mcs=None,
                                                   common_tx_mcs_count=0,
@@ -598,6 +673,10 @@ class LinkLayerStats():
                                                   common_rx_mcs=None,
                                                   common_rx_mcs_count=0,
                                                   common_rx_mcs_freq=0,
+                                                  common_rx_bw = None,
+                                                  common_rx_bw_pct = 0,
+                                                  common_tx_bw = None,
+                                                  common_tx_bw_pct = 0,
                                                   rx_per=float('nan'))
         mcs_ids = []
         tx_mpdu = []
@@ -616,17 +695,21 @@ class LinkLayerStats():
         llstats_summary['common_tx_mcs_count'] = numpy.max(tx_mpdu)
         llstats_summary['common_rx_mcs'] = mcs_ids[numpy.argmax(rx_mpdu)]
         llstats_summary['common_rx_mcs_count'] = numpy.max(rx_mpdu)
+        llstats_summary['common_rx_bw'] = llstats_dict['bw_stats']['rx_common_bw']
+        llstats_summary['common_rx_bw_pct'] = llstats_dict['bw_stats']['rx_common_bw_pct']
+        llstats_summary['common_tx_bw'] = llstats_dict['bw_stats']['tx_common_bw']
+        llstats_summary['common_tx_bw_pct'] = llstats_dict['bw_stats']['tx_common_bw_pct']
         if sum(tx_mpdu):
-            llstats_summary['mean_tx_phy_rate'] = numpy.average(
-                phy_rates, weights=tx_mpdu)
+            llstats_summary['mean_tx_phy_rate'] = numpy.multiply(numpy.average(
+                phy_rates, weights=tx_mpdu), llstats_dict['bw_stats']['tx_phy_bw_weight'])
             llstats_summary['common_tx_mcs_freq'] = (
                 llstats_summary['common_tx_mcs_count'] / sum(tx_mpdu))
         else:
             llstats_summary['mean_tx_phy_rate'] = 0
             llstats_summary['common_tx_mcs_freq'] = 0
         if sum(rx_mpdu):
-            llstats_summary['mean_rx_phy_rate'] = numpy.average(
-                phy_rates, weights=rx_mpdu)
+            llstats_summary['mean_rx_phy_rate'] = numpy.multiply(numpy.average(
+                phy_rates, weights=rx_mpdu), llstats_dict['bw_stats']['rx_phy_bw_weight'])
             llstats_summary['common_rx_mcs_freq'] = (
                 llstats_summary['common_rx_mcs_count'] / sum(rx_mpdu))
             total_rx_frames = llstats_dict['mpdu_stats'][
@@ -647,6 +730,8 @@ class LinkLayerStats():
         self.llstats_incremental['raw_output'] = llstats_output
         self.llstats_incremental['phy_log_output'] = phy_log_output
         self.llstats_incremental['mcs_stats'] = self._parse_mcs_stats(
+            llstats_output)
+        self.llstats_incremental['bw_stats'] = self._parse_bw_stats(
             llstats_output)
         self.llstats_incremental['mpdu_stats'] = self._parse_mpdu_stats(
             llstats_output)
