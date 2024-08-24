@@ -28,7 +28,6 @@ from acts.controllers.utils_lib.ssh import connection
 
 _POLL_AP_RETRY_INTERVAL_SEC = 1
 _WAIT_OPENWRT_AP_BOOT_SEC = 30
-_NO_ATTENUATION = 0
 
 class WifiPreTest(WifiBaseTest):
   """ Wi-Fi PreTest."""
@@ -39,7 +38,7 @@ class WifiPreTest(WifiBaseTest):
   def setup_class(self):
     super().setup_class()
 
-    req_params = ["Attenuator", "OpenWrtAP"]
+    req_params = ["OpenWrtAP"]
     self.unpack_userparams(req_param_names=req_params)
 
     self.dut = self.android_devices[0]
@@ -58,11 +57,6 @@ class WifiPreTest(WifiBaseTest):
       else:
         raise signals.TestFailure(
           f"Unable to connect to OpenWrt AP: {openwrt.ssh_settings.hostname}")
-
-    # Set all attenuators to 0 dB.
-    for i, attenuator in enumerate(self.attenuators):
-      attenuator.set_atten(_NO_ATTENUATION)
-      logging.info(f"Attenuator {i} set to {_NO_ATTENUATION} dB")
 
     self.start_openwrt()
 
