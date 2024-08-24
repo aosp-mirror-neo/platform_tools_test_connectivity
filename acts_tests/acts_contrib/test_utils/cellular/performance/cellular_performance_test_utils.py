@@ -74,31 +74,10 @@ LONG_SLEEP = 10
 
 POWER_STATS_DUMPSYS_CMD = 'dumpsys android.hardware.power.stats.IPowerStats/default delta'
 
-
-class ObjNew(object):
-    """Create a random obj with unknown attributes and value.
-
-    """
-
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-    def __contains__(self, item):
-        """Function to check if one attribute is contained in the object.
-
-        Args:
-            item: the item to check
-        Return:
-            True/False
-        """
-        return hasattr(self, item)
-
-
 def extract_test_id(testcase_params, id_fields):
     test_id = collections.OrderedDict(
         (param, testcase_params[param]) for param in id_fields)
     return test_id
-
 
 def generate_endc_combo_config_from_string(endc_combo_str):
     """Function to generate ENDC combo config from combo string
@@ -124,7 +103,7 @@ def generate_endc_combo_config_from_string(endc_combo_str):
     cell_config_regex = re.compile(
         r'(?P<cell_type>[B,N])(?P<band>[0-9]+)(?P<bandwidth_class>[A-Z])\[bw=(?P<dl_bandwidth>[0-9]+)\]'
         r'(\[ch=)?(?P<channel>[0-9]+)?\]?'
-        r'\[ant=(?P<dl_mimo_config>[0-9]+),?(?P<transmission_mode>[TM0-9]+)?,?(?P<num_layers>[TM0-9]+)?,?(?P<num_codewords>[TM0-9]+)?\];?'
+        r'\[ant=(?P<dl_mimo_config>[0-9]+),?(?P<transmission_mode>[TM0-9]+)?,?(?P<num_layers>[0-9]+)?,?(?P<num_codewords>[0-9]+)?\]?;?'
         r'(?P<ul_bandwidth_class>[A-Z])?(\[ant=)?(?P<ul_mimo_config>[0-9])?(\])?'
     )
     for cell_string in endc_combo_list:
@@ -146,6 +125,9 @@ def generate_endc_combo_config_from_string(endc_combo_str):
             cell_config['dl_mimo_config'] = 'D{nss}U{nss}'.format(
                 nss=cell_config['dl_mimo_config'])
             cell_config['dl_subframe_allocation'] = [1] * 10
+            cell_config['tdd_frame_config'] = 5
+            cell_config['tdd_ssf_config']=8
+            cell_config['tdd_ssf_config'] = 8
             lte_dl_carriers.append(cell_config['cell_number'])
         else:
             # Configure NR specific parameters
@@ -194,6 +176,9 @@ def generate_endc_combo_config_from_csv_row(test_config):
     Returns:
         endc_combo_config: dictionary with all ENDC combo settings
     """
+    for key, value in test_config.items():
+        if value == '':
+            test_config[key] = None
     endc_combo_config = collections.OrderedDict()
     lte_cell_count = 0
     nr_cell_count = 0
@@ -206,32 +191,22 @@ def generate_endc_combo_config_from_csv_row(test_config):
     cell_config_list = []
     if 'lte_band' in test_config and test_config['lte_band']:
         lte_cell = {
-            'cell_type':
-            'LTE',
-            'cell_number':
-            1,
-            'pcc':
-            1,
-            'band':
-            test_config['lte_band'],
-            'dl_bandwidth':
-            test_config['lte_bandwidth'],
-            'ul_enabled':
-            1,
-            'duplex_mode':
-            test_config['lte_duplex_mode'],
-            'dl_mimo_config':
-            'D{nss}U{nss}'.format(nss=test_config['lte_dl_mimo_config']),
-            'ul_mimo_config':
-            'D{nss}U{nss}'.format(nss=test_config['lte_ul_mimo_config']),
-            'transmission_mode':
-            test_config['lte_tm_mode'],
-            'num_codewords':
-            test_config['lte_codewords'],
-            'num_layers':
-            test_config['lte_layers'],
+            'cell_type': 'LTE',
+            'cell_number': 1,
+            'pcc': 1,
+            'band': test_config['lte_band'],
+            'dl_bandwidth': test_config['lte_bandwidth'],
+            'ul_enabled': 1,
+            'duplex_mode': test_config['lte_duplex_mode'],
+            'dl_mimo_config': 'D{nss}U{nss}'.format(nss=test_config['lte_dl_mimo_config']),
+            'ul_mimo_config': 'D{nss}U{nss}'.format(nss=test_config['lte_ul_mimo_config']),
+            'transmission_mode': test_config['lte_tm_mode'],
+            'num_codewords': test_config['lte_codewords'],
+            'num_layers': test_config['lte_layers'],
             'dl_subframe_allocation':
-            test_config.get('dl_subframe_allocation', [1] * 10)
+                list(test_config['lte_dl_subframe_allocation']) if test_config['lte_dl_subframe_allocation'] else [1]*10,
+            'tdd_frame_config': test_config['lte_tdd_frame_config'],
+            'tdd_ssf_config': test_config['lte_tdd_ssf_config']
         }
         cell_config_list.append(lte_cell)
         endc_combo_config['lte_pcc'] = 1
@@ -297,6 +272,7 @@ class PixelDeviceUtils():
     def __init__(self, dut, log):
         self.dut = dut
         self.log = log
+        self.set_screen_timeout(15)
 
     def stop_services(self):
         """Gracefully stop sl4a before power measurement"""
@@ -638,6 +614,31 @@ class PixelDeviceUtils():
             return False
         return True
 
+    def set_screen_timeout(self, timeout=5):
+        self.dut.adb.shell('settings put system screen_off_timeout {}'.format(
+            timeout * 1000))
+    def get_screen_state(self):
+        screen_state_output = self.dut.adb.shell(
+            "dumpsys display | grep 'mScreenState'")
+        if 'ON' in screen_state_output:
+            return 1
+        else:
+            return 0
+
+    def set_screen_state(self, state):
+        curr_state = self.get_screen_state()
+        if state == curr_state:
+            self.log.debug('Screen state already {}'.format(state))
+        elif state == True:
+            self.dut.adb.shell('input keyevent KEYCODE_WAKEUP')
+        elif state == False:
+            self.dut.adb.shell('input keyevent KEYCODE_SLEEP')
+
+    def go_to_sleep(self):
+        if self.dut.skip_sl4a:
+            self.set_screen_state(0)
+        else:
+            self.dut.droid.goToSleepNow()
 
 class AndroidNonPixelDeviceUtils():
 
@@ -645,6 +646,9 @@ class AndroidNonPixelDeviceUtils():
         self.dut = dut
         self.log = log
         self.set_screen_timeout()
+        if getattr(dut, "stop_logcat", 0):
+            self.log.info('Stopping ADB logcat.')
+            dut.stop_adb_logcat()
 
     def start_services(self):
         self.log.debug('stop_services not supported on non_pixel devices')
@@ -704,6 +708,9 @@ class AndroidNonPixelDeviceUtils():
             self.dut.adb.shell('input keyevent KEYCODE_WAKEUP')
         elif state == False:
             self.dut.adb.shell('input keyevent KEYCODE_SLEEP')
+
+    def go_to_sleep(self):
+        self.set_screen_state(0)
 
     def set_screen_timeout(self, timeout=5):
         self.dut.adb.shell('settings put system screen_off_timeout {}'.format(

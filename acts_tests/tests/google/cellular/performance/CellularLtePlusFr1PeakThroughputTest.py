@@ -261,7 +261,9 @@ class CellularLteFr1EndcPeakThroughputTest(CellularLtePlusFr1PeakThroughputTest
                                               lte_ul_mcs_table='QAM256',
                                               transform_precoding=0,
                                               schedule_scenario='FULL_TPUT',
-                                              schedule_slot_ratio=80)
+                                              schedule_slot_ratio=80,
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
 
     def generate_test_cases(self, mcs_pair_list, **kwargs):
         test_cases = []
@@ -315,7 +317,9 @@ class CellularFr1SingleCellPeakThroughputTest(CellularLtePlusFr1PeakThroughputTe
             lte_dl_mcs=4,
             lte_dl_mcs_table='QAM256',
             lte_ul_mcs=4,
-            lte_ul_mcs_table='QAM64')
+            lte_ul_mcs_table='QAM64',
+          nr_dl_mcs_table='Q256',
+          nr_ul_mcs_table='Q64')
 
     def generate_test_cases(self, nr_mcs_pair_list, nr_channel_list, **kwargs):
 
@@ -357,6 +361,7 @@ class CellularLteSingleCellPeakThroughputTest(CellularLtePlusFr1PeakThroughputTe
         self.publish_testcase_metrics = True
         self.testclass_params = self.user_params['throughput_test_params']
         self.tests = self.generate_test_cases(lte_mcs_pair_list=[
+            (('QAM256', 28), ('QAM256', 23)),
             (('QAM256', 27), ('QAM256', 4)), (('QAM256', 4), ('QAM256', 27))
         ],
                                               transform_precoding=0)

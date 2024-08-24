@@ -68,15 +68,16 @@ class CellularLteRvrTest(CellularThroughputBaseTest):
                     title='Band {} ({}) - BLER Curves'.format(
                         cell_config['band'],
                         testcase_data['testcase_params']['lte_dl_mcs_table']),
-                    x_label='Cell Power (dBm)',
+                    x_label='Cell Power (dBm/SCS)',
                     primary_y_label='BLER (Mbps)')
                 test_id_rvr = test_id + tuple('RvR')
                 plots[test_id_rvr] = BokehFigure(
                     title='Band {} ({}) - RvR'.format(
                         cell_config['band'],
                         testcase_data['testcase_params']['lte_dl_mcs_table']),
-                    x_label='Cell Power (dBm)',
-                    primary_y_label='PHY Rate (Mbps)')
+                    x_label='Cell Power (dBm/SCS)',
+                    primary_y_label='PHY Rate (Mbps)',
+                    secondary_y_label='Power Consumption (mW)')
             # Compile test id data and metrics
             compiled_data[test_id]['average_throughput'].append(
                 testcase_data['average_throughput_list'])
@@ -88,16 +89,25 @@ class CellularLteRvrTest(CellularThroughputBaseTest):
             plots[test_id].add_line(
                 testcase_data['cell_power_list'],
                 testcase_data['bler_list'],
-                'MCS {}'.format(
-                    testcase_data['testcase_params']['lte_dl_mcs']),
+                'Band {} - BLER'.format(
+                    cell_config['band']),
                 width=1)
             plots[test_id_rvr].add_line(
                 testcase_data['cell_power_list'],
                 testcase_data['average_throughput_list'],
-                'MCS {}'.format(
-                    testcase_data['testcase_params']['lte_dl_mcs']),
+                'Band {} - RvR'.format(
+                    cell_config['band']),
                 width=1,
                 style='dashed')
+            if self.power_monitor:
+                plots[test_id_rvr].add_line(
+                    testcase_data['cell_power_list'],
+                    testcase_data['average_power_list'],
+                    'Band {} - Power Consumption (mW)'.format(
+                        cell_config['band']),
+                    width=1,
+                    style='dashdot',
+                    y_axis='secondary')
 
         # Compute average RvRs and compute metrics over orientations
         for test_id, test_data in compiled_data.items():
@@ -137,6 +147,7 @@ class CellularLteRvrTest(CellularThroughputBaseTest):
         bler_list = []
         average_throughput_list = []
         theoretical_throughput_list = []
+        average_power_list = []
         cell_power_list = testcase_data['testcase_params']['cell_power_sweep'][
             0]
         for result in testcase_data['results']:
@@ -146,20 +157,26 @@ class CellularLteRvrTest(CellularThroughputBaseTest):
                 result['throughput_measurements']['lte_tput_result']['total']['DL']['average_tput'])
             theoretical_throughput_list.append(
                 result['throughput_measurements']['lte_tput_result']['total']['DL']['theoretical_tput'])
+            if self.power_monitor:
+                average_power_list.append(result['average_power'])
         padding_len = len(cell_power_list) - len(average_throughput_list)
         average_throughput_list.extend([0] * padding_len)
         theoretical_throughput_list.extend([0] * padding_len)
+        if self.power_monitor:
+            average_power_list.extend([0] * padding_len)
 
         testcase_data['bler_list'] = bler_list
         testcase_data['average_throughput_list'] = average_throughput_list
         testcase_data[
             'theoretical_throughput_list'] = theoretical_throughput_list
+        testcase_data['average_power_list'] = average_power_list
         testcase_data['cell_power_list'] = cell_power_list
 
         plot = BokehFigure(
             title='Band {} - RvR'.format(testcase_data['testcase_params']['endc_combo_config']['cell_list'][0]['band']),
             x_label='Cell Power (dBm)',
-            primary_y_label='PHY Rate (Mbps)')
+            primary_y_label='PHY Rate (Mbps)',
+            secondary_y_label='Power Consumption (mW)')
 
         plot.add_line(
             testcase_data['cell_power_list'],
@@ -169,9 +186,17 @@ class CellularLteRvrTest(CellularThroughputBaseTest):
         plot.add_line(
             testcase_data['cell_power_list'],
             testcase_data['theoretical_throughput_list'],
-            'Average Throughput',
+            'Theoretical Throughput',
             width=1,
             style='dashed')
+        if self.power_monitor:
+            plot.add_line(
+                testcase_data['cell_power_list'],
+                testcase_data['average_power_list'],
+                'Power Consumption (mW)',
+                width=1,
+                style='dashdot',
+                y_axis='secondary')
         plot.generate_figure()
         output_file_path = os.path.join(self.log_path, '{}.html'.format(self.current_test_name))
         BokehFigure.save_figure(plot, output_file_path)
@@ -202,7 +227,7 @@ class CellularLteRvrTest(CellularThroughputBaseTest):
                 test_params = collections.OrderedDict(
                     endc_combo_config=endc_combo_config,
                     lte_dl_mcs_table=lte_dl_mcs_table,
-                    lte_dl_mcs='WCQI',
+                    lte_dl_mcs=self.testclass_params['link_adaptation_config'],
                     lte_ul_mcs_table=lte_ul_mcs_table,
                     lte_ul_mcs=lte_ul_mcs,
                     **kwargs)

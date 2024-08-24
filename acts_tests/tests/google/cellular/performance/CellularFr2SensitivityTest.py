@@ -58,7 +58,9 @@ class CellularFr2SensitivityTest(CellularThroughputBaseTest):
             schedule_scenario="FULL_TPUT",
             schedule_slot_ratio=80,
             force_contiguous_nr_channel=True,
-            transform_precoding=0)
+            transform_precoding=0,
+            nr_dl_mcs_table='Q256',
+            nr_ul_mcs_table='Q64')
 
     def process_testclass_results(self):
         # Plot individual test id results raw data and compile metrics

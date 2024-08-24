@@ -304,8 +304,7 @@ class BokehFigure():
                 bokeh.models.LinearAxis(
                     y_range_name='secondary',
                     axis_label=self.fig_property['secondary_y_label'],
-                    axis_label_text_font_size=self.
-                    fig_property['axis_label_size']), 'right')
+                    axis_label_text_font_size=self.fig_property['axis_label_size']), 'right')
         # plot formatting
         self.plot.legend.location = self.fig_property['legend_location']
         self.plot.legend.click_policy = 'hide'

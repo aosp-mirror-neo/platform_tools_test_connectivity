@@ -414,7 +414,9 @@ class CellularFr2DlPeakThroughputTest(CellularFr2PeakThroughputTest):
                                               lte_dl_mcs=4,
                                               lte_dl_mcs_table='QAM64',
                                               lte_ul_mcs=4,
-                                              lte_ul_mcs_table='QAM64')
+                                              lte_ul_mcs_table='QAM64',
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
 
 
 class CellularFr2CpOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
@@ -437,7 +439,9 @@ class CellularFr2CpOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
                                               lte_dl_mcs=4,
                                               lte_dl_mcs_table='QAM64',
                                               lte_ul_mcs=4,
-                                              lte_ul_mcs_table='QAM64')
+                                              lte_ul_mcs_table='QAM64',
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
 
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
@@ -455,7 +459,9 @@ class CellularFr2CpOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                     nr_dl_mcs_table='Q256',
+                                     nr_ul_mcs_table='Q64'))
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
                                      ['low', 'mid', 'high'], [(4, 16), (4, 25),
@@ -472,7 +478,9 @@ class CellularFr2CpOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                     nr_dl_mcs_table='Q256',
+                                     nr_ul_mcs_table='Q64'))
 
 
 class CellularFr2DftsOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
@@ -495,7 +503,9 @@ class CellularFr2DftsOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
                                               lte_dl_mcs=4,
                                               lte_dl_mcs_table='QAM64',
                                               lte_ul_mcs=4,
-                                              lte_ul_mcs_table='QAM64')
+                                              lte_ul_mcs_table='QAM64',
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
 
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
@@ -513,7 +523,9 @@ class CellularFr2DftsOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                     nr_dl_mcs_table='Q256',
+                                     nr_ul_mcs_table='Q64'))
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
                                      ['low', 'mid', 'high'], [(4, 16), (4, 25),
@@ -530,7 +542,9 @@ class CellularFr2DftsOfdmUlPeakThroughputTest(CellularFr2PeakThroughputTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                     nr_dl_mcs_table='Q256',
+                                     nr_ul_mcs_table='Q64'))
 
 
 class CellularFr2DlFrequencySweepPeakThroughputTest(
@@ -559,7 +573,9 @@ class CellularFr2DlFrequencySweepPeakThroughputTest(
             lte_dl_mcs=4,
             lte_dl_mcs_table='QAM64',
             lte_ul_mcs=4,
-            lte_ul_mcs_table='QAM64')
+            lte_ul_mcs_table='QAM64',
+            nr_dl_mcs_table='Q256',
+            nr_ul_mcs_table='Q64')
 
     def generate_test_cases(self, bands, channels, nr_mcs_pair_list,
                             num_dl_cells_list, num_ul_cells_list,

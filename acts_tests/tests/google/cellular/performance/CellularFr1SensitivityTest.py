@@ -52,7 +52,9 @@ class CellularFr1SensitivityTest(CellularThroughputBaseTest):
             lte_ul_mcs=4,
             transform_precoding=0,
             schedule_scenario='FULL_TPUT',
-            schedule_slot_ratio=80
+            schedule_slot_ratio=80,
+            nr_dl_mcs_table='Q256',
+            nr_ul_mcs_table='Q64'
         )
 
     def process_testclass_results(self):
@@ -72,21 +74,25 @@ class CellularFr1SensitivityTest(CellularThroughputBaseTest):
                     'average_throughput': [],
                     'theoretical_throughput': [],
                     'cell_power': [],
+                    'average_power': []
                 }
                 plots[test_id] = BokehFigure(
                     title='Band {} - BLER Curves'.format(cell_config['band']),
-                    x_label='Cell Power (dBm)',
+                    x_label='Cell Power (dBm/SCS)',
                     primary_y_label='BLER (Mbps)')
                 test_id_rvr = test_id + tuple('RvR')
                 plots[test_id_rvr] = BokehFigure(
                     title='Band {} - RvR'.format(cell_config['band']),
-                    x_label='Cell Power (dBm)',
-                    primary_y_label='PHY Rate (Mbps)')
+                    x_label='Cell Power (dBm/SCS)',
+                    primary_y_label='PHY Rate (Mbps)',
+                    secondary_y_label='Power Consumption (mW)')
             # Compile test id data and metrics
             compiled_data[test_id]['average_throughput'].append(
                 testcase_data['average_throughput_list'])
             compiled_data[test_id]['cell_power'].append(
                 testcase_data['cell_power_list'])
+            compiled_data[test_id]['average_power'].append(
+                testcase_data['average_power_list'])
             compiled_data[test_id]['mcs'].append(
                 testcase_data['testcase_params']['nr_dl_mcs'])
             # Add test id to plots
@@ -101,6 +107,16 @@ class CellularFr1SensitivityTest(CellularThroughputBaseTest):
                 'MCS {}'.format(testcase_data['testcase_params']['nr_dl_mcs']),
                 width=1,
                 style='dashed')
+            if self.power_monitor:
+                plots[test_id_rvr].add_line(
+                    testcase_data['cell_power_list'],
+                    testcase_data['average_power_list'],
+                    'MCS {} - Power'.format(
+                        testcase_data['testcase_params']['nr_dl_mcs']),
+                    width=1,
+                    style='dashdot',
+                    y_axis='secondary')
+
 
         for test_id, test_data in compiled_data.items():
             test_id_rvr = test_id + tuple('RvR')
@@ -153,6 +169,7 @@ class CellularFr1SensitivityTest(CellularThroughputBaseTest):
         theoretical_throughput_list = []
         nr_cell_index = testcase_data['testcase_params']['endc_combo_config'][
             'lte_cell_count']
+        average_power_list = []
         cell_power_list = testcase_data['testcase_params']['cell_power_sweep'][
             nr_cell_index]
         for result in testcase_data['results']:
@@ -164,9 +181,13 @@ class CellularFr1SensitivityTest(CellularThroughputBaseTest):
             theoretical_throughput_list.append(
                 result['throughput_measurements']['nr_tput_result']['total']
                 ['DL']['theoretical_tput'])
+            if self.power_monitor:
+                average_power_list.append(result['average_power'])
         padding_len = len(cell_power_list) - len(average_throughput_list)
         average_throughput_list.extend([0] * padding_len)
         theoretical_throughput_list.extend([0] * padding_len)
+        if self.power_monitor:
+            average_power_list.extend([0] * padding_len)
 
         bler_above_threshold = [
             bler > self.testclass_params['bler_threshold']
@@ -189,6 +210,7 @@ class CellularFr1SensitivityTest(CellularThroughputBaseTest):
         testcase_data[
             'theoretical_throughput_list'] = theoretical_throughput_list
         testcase_data['cell_power_list'] = cell_power_list
+        testcase_data['average_power_list'] = average_power_list
         testcase_data['sensitivity'] = sensitivity
 
         results_file_path = os.path.join(
@@ -278,5 +300,7 @@ class CellularFr1Sensitivity_SampleMCS_Test(CellularFr1SensitivityTest):
             lte_ul_mcs=4,
             transform_precoding=0,
             schedule_scenario='FULL_TPUT',
-            schedule_slot_ratio=80
+            schedule_slot_ratio=80,
+            nr_dl_mcs_table='Q256',
+            nr_ul_mcs_table='Q64'
         )

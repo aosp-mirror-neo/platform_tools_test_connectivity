@@ -51,7 +51,6 @@ PHONE_BATTERY_VOLTAGE_DEFAULT = 4
 from functools import wraps
 import logging
 
-
 def suspend_logging(func):
 
     @wraps(func)
@@ -121,6 +120,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         if self.power_monitor:
             self.power_monitor.connect_usb()
             self.dut.wait_for_boot_completion()
+            self.dut_utils.start_services()
         self.log.info('Turning airplane mode on')
         try:
             self.dut_utils.toggle_airplane_mode(True, False)
@@ -139,8 +139,12 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
             self.dut_utils.start_pixel_logger()
 
     def teardown_test(self):
+        self.process_testcase_results()
         if self.power_monitor:
+            self.log.info('Reconnecting USB and waiting for boot completion.')
             self.power_monitor.connect_usb()
+            self.dut.wait_for_boot_completion()
+            self.dut_utils.start_services()
         self.retry_flag = False
         self.log.info('Turing airplane mode on')
         self.dut_utils.toggle_airplane_mode(True, False)
@@ -151,7 +155,6 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         os.makedirs(self.log_path, exist_ok=True)
         if self.testclass_params.get('enable_pixel_logs', 0):
             self.dut_utils.stop_pixel_logger(log_path)
-        self.process_testcase_results()
         self.pass_fail_check()
 
     def on_retry(self):
@@ -179,14 +182,21 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         self.log.debug('device start time %s, host start time %s', device_time,
                        host_time)
         self.device_to_host_offset = float(device_time) - host_time
-        if hasattr(self, 'bitses'):
+        self.power_monitor_config = {}
+        if hasattr(self, 'bitses') and self.testclass_params.get('measure_power', 1):
             power_monitor = self.bitses[0]
             power_monitor.setup(registry=self.user_params)
-        elif hasattr(self, 'monsoons'):
+            self.power_monitor_config = {'voltage': self.user_params['Bits'][0]['Monsoon']['monsoon_voltage'],
+                                         'frequency': 976.5925,
+                                         'measurement_type': 'power'}
+        elif hasattr(self, 'monsoons') and self.testclass_params.get('measure_power', 1):
             power_monitor = power_monitor_lib.PowerMonitorMonsoonFacade(
                 self.monsoons[0])
             self.monsoons[0].set_max_current(self.MonsoonParams['current'])
             self.monsoons[0].set_voltage(self.MonsoonParams['voltage'])
+            self.power_monitor_config = {'voltage': self.MonsoonParams['voltage'],
+                                         'frequency': self.MonsoonParams['frequency'],
+                                         'measurement_type': 'current'}
         else:
             power_monitor = None
         return power_monitor
@@ -323,52 +333,20 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         return result
 
     def run_single_throughput_measurement(self, testcase_params):
-        result = collections.OrderedDict()
-        self.log.info('Starting BLER & throughput tests.')
-        if testcase_params['endc_combo_config']['nr_cell_count']:
-            self.keysight_test_app.start_bler_measurement(
-                'NR5G', testcase_params['endc_combo_config']['nr_dl_carriers'],
-                testcase_params['bler_measurement_length'])
-        if testcase_params['endc_combo_config']['lte_cell_count']:
-            self.keysight_test_app.start_bler_measurement(
-                'LTE',
-                testcase_params['endc_combo_config']['lte_dl_carriers'][0],
-                testcase_params['bler_measurement_length'])
-
-        if self.testclass_params['traffic_type'] != 'PHY':
-            result['iperf_throughput'] = self.run_iperf_traffic(
-                testcase_params)
-
-        if testcase_params['endc_combo_config']['nr_cell_count']:
-            result['nr_bler_result'] = self.keysight_test_app.get_bler_result(
-                'NR5G', testcase_params['endc_combo_config']['nr_dl_carriers'],
-                testcase_params['endc_combo_config']['nr_ul_carriers'],
-                testcase_params['bler_measurement_length'])
-            result['nr_tput_result'] = self.keysight_test_app.get_throughput(
-                'NR5G', testcase_params['endc_combo_config']['nr_dl_carriers'],
-                testcase_params['endc_combo_config']['nr_ul_carriers'])
-        if testcase_params['endc_combo_config']['lte_cell_count']:
-            result['lte_bler_result'] = self.keysight_test_app.get_bler_result(
-                cell_type='LTE',
-                dl_cells=testcase_params['endc_combo_config']
-                ['lte_dl_carriers'],
-                ul_cells=testcase_params['endc_combo_config']
-                ['lte_ul_carriers'],
-                length=testcase_params['bler_measurement_length'])
-            result['lte_tput_result'] = self.keysight_test_app.get_throughput(
-                'LTE', testcase_params['endc_combo_config']['lte_dl_carriers'],
-                testcase_params['endc_combo_config']['lte_ul_carriers'])
+        self.start_single_throughput_measurement(testcase_params)
+        result = self.stop_single_throughput_measurement(testcase_params)
         return result
 
-    @suspend_logging
+    #@suspend_logging
     def meausre_power_silently(self, measurement_time, measurement_wait,
-                               data_path):
+                               data_path, measurement_tag):
+        measurement_name = '{}_{}'.format(self.test_name, measurement_tag)
         measurement_args = dict(duration=measurement_time,
                                 measure_after_seconds=measurement_wait,
-                                hz=self.MonsoonParams['frequency'])
+                                hz=self.power_monitor_config['frequency'])
 
         self.power_monitor.measure(measurement_args=measurement_args,
-                                   measurement_name=self.test_name,
+                                   measurement_name=measurement_name,
                                    start_time=self.device_to_host_offset,
                                    monsoon_output_path=data_path)
 
@@ -386,12 +364,13 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
             measurement_tag: tag to append to file names
         """
         if self.dut.is_connected():
+            self.dut_utils.go_to_sleep()
             self.dut_utils.stop_services()
             time.sleep(SHORT_SLEEP)
             self.dut_utils.log_odpm(
                 os.path.join(
                     context.get_current_context().get_full_output_path(),
-                    '{}.txt'.format('before')))
+                    '{}_odpm_{}_{}.txt'.format(self.test_name, measurement_tag, 'start')))
             self.power_monitor.disconnect_usb()
         else:
             self.log.info('DUT already disconnected. Skipping USB operations.')
@@ -399,44 +378,58 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         self.log.info('Starting power measurement. Duration: {}s. Offset: '
                       '{}s. Voltage: {} V.'.format(
                           measurement_time, measurement_wait,
-                          self.MonsoonParams['voltage']))
+                          self.power_monitor_config['voltage']))
         # Collecting current measurement data and plot
         tag = '{}_{}'.format(self.test_name, measurement_tag)
         data_path = os.path.join(
             context.get_current_context().get_full_output_path(),
             '{}.txt'.format(tag))
         self.meausre_power_silently(measurement_time, measurement_wait,
-                                    data_path)
+                                    data_path, measurement_tag)
         self.power_monitor.release_resources()
         if hasattr(self, 'bitses') and self.bits_root_rail_csv_export:
             path = os.path.join(
                 context.get_current_context().get_full_output_path(), 'Kibble')
+            os.makedirs(path, exist_ok=True)
             self.power_monitor.get_bits_root_rail_csv_export(
-                path, self.test_name)
+                path, '{}_{}'.format(self.test_name, measurement_tag))
+        samples = self.power_monitor.get_waveform(file_path=data_path)
 
         if reconnect_usb:
             self.log.info('Reconnecting USB.')
             self.power_monitor.connect_usb()
             self.dut.wait_for_boot_completion()
+            time.sleep(LONG_SLEEP)
             # Save ODPM if applicable
             self.dut_utils.log_odpm(
                 os.path.join(
                     context.get_current_context().get_full_output_path(),
-                    '{}.txt'.format('after')))
+                    '{}_odpm_{}_{}.txt'.format(self.test_name, measurement_tag, 'end')))
             # Restart Sl4a and other services
             self.dut_utils.start_services()
 
-        samples = self.power_monitor.get_waveform(file_path=data_path)
-
-        current = [sample[1] for sample in samples]
-        average_current = sum(current) * 1000 / len(current)
-        self.log.info('Average current computed: {}'.format(average_current))
+        measurement_samples = [sample[1] for sample in samples]
+        average_measurement = sum(measurement_samples) * 1000 / len(measurement_samples)
+        if self.power_monitor_config['measurement_type'] == 'current':
+            average_power = average_measurement * self.power_monitor_config['voltage']
+        else:
+            average_power = average_measurement
+        self.log.info('Average power : {}'.format(average_power))
         plot_title = '{}_{}'.format(self.test_name, measurement_tag)
         power_plot_utils.current_waveform_plot(
-            samples, self.MonsoonParams['voltage'],
+            samples, self.power_monitor_config['voltage'],
             context.get_current_context().get_full_output_path(), plot_title)
 
-        return average_current
+        return average_power
+
+    @wputils.nonblocking
+    def collect_power_data_nonblocking(self,
+                           measurement_time,
+                           measurement_wait,
+                           reconnect_usb=0,
+                           measurement_tag=0):
+        return self.collect_power_data(
+            measurement_time, measurement_wait, reconnect_usb, measurement_tag)
 
     def print_throughput_result(self, result):
         # Print Test Summary
@@ -491,10 +484,14 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                     result['iperf_throughput']))
 
     def setup_tester(self, testcase_params):
+
         # Configure all cells
         self.keysight_test_app.toggle_contiguous_nr_channels(0)
         for cell_idx, cell in enumerate(
                 testcase_params['endc_combo_config']['cell_list']):
+            self.keysight_test_app.enable_awgn_noise(cell['cell_type'], cell['cell_number'], 0)
+            self.keysight_test_app.set_channel_emulator_state(0)
+
             if cell['cell_type'] == 'NR5G':
                 self.keysight_test_app.set_nr_cell_type(
                     cell['cell_type'], cell['cell_number'],
@@ -506,7 +503,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                                                  cell['band'])
             self.keysight_test_app.set_cell_dl_power(
                 cell['cell_type'], cell['cell_number'],
-                testcase_params['cell_power_sweep'][cell_idx][0], 1)
+                testcase_params['cell_power_sweep'][cell_idx][0], 0)
             self.keysight_test_app.set_cell_input_power(
                 cell['cell_type'], cell['cell_number'],
                 self.testclass_params['input_power'][cell['cell_type']])
@@ -536,10 +533,20 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                     cell['cell_number'], cell['num_codewords'])
                 self.keysight_test_app.set_lte_cell_num_layers(
                     cell['cell_number'], cell['num_layers'])
-                self.keysight_test_app.set_lte_cell_dl_subframe_allocation(
-                    cell['cell_number'], cell['dl_subframe_allocation'])
-                self.keysight_test_app.set_lte_control_region_size(
-                    cell['cell_number'], 1)
+
+                # self.keysight_test_app.set_lte_cell_dl_subframe_allocation(
+                #     cell['cell_number'], cell['dl_subframe_allocation'])
+                # self.keysight_test_app.set_lte_cell_tdd_frame_config(
+                #     cell['cell_number'], cell['tdd_frame_config'], cell['tdd_ssf_config'])
+                # self.keysight_test_app.set_lte_control_region_size(
+                #     cell['cell_number'], 1)
+                # self.keysight_test_app.set_lte_cell_mcs(
+                #     cell['cell_number'], testcase_params['lte_dl_mcs_table'],
+                #     testcase_params['lte_dl_mcs'],
+                #     testcase_params['lte_ul_mcs_table'],
+                #     testcase_params['lte_ul_mcs'])
+                # self.keysight_test_app.set_lte_ul_mac_padding(
+                #     self.testclass_params['lte_ul_mac_padding'])
             if cell['ul_enabled'] and cell['cell_type'] == 'NR5G':
                 self.keysight_test_app.set_cell_mimo_config(
                     cell['cell_type'], cell['cell_number'], 'UL',
@@ -553,29 +560,21 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         if testcase_params.get('force_contiguous_nr_channel', False):
             self.keysight_test_app.toggle_contiguous_nr_channels(1)
 
-        if testcase_params['endc_combo_config']['lte_cell_count']:
-            self.keysight_test_app.set_lte_cell_mcs(
-                'CELL1', testcase_params['lte_dl_mcs_table'],
-                testcase_params['lte_dl_mcs'],
-                testcase_params['lte_ul_mcs_table'],
-                testcase_params['lte_ul_mcs'])
-            self.keysight_test_app.set_lte_ul_mac_padding(
-                self.testclass_params['lte_ul_mac_padding'])
-
         if testcase_params['endc_combo_config']['nr_cell_count']:
-            if 'schedule_scenario' in testcase_params:
-                self.keysight_test_app.set_nr_cell_schedule_scenario(
-                    'CELL1', testcase_params['schedule_scenario'])
-                if testcase_params['schedule_scenario'] == 'FULL_TPUT':
-                    self.keysight_test_app.set_nr_schedule_slot_ratio(
-                        'CELL1', testcase_params['schedule_slot_ratio'])
-                    self.keysight_test_app.set_nr_schedule_tdd_pattern(
-                        'CELL1', testcase_params.get('tdd_pattern', 0))
-            self.keysight_test_app.set_nr_ul_dft_precoding(
-                'CELL1', testcase_params['transform_precoding'])
-            self.keysight_test_app.set_nr_cell_mcs(
-                'CELL1', testcase_params['nr_dl_mcs'],
-                testcase_params['nr_ul_mcs'])
+            #if 'schedule_scenario' in testcase_params:
+            #     self.keysight_test_app.set_nr_cell_schedule_scenario(
+            #         'CELL1', testcase_params['schedule_scenario'])
+            #     if testcase_params['schedule_scenario'] == 'FULL_TPUT':
+            #         self.keysight_test_app.set_nr_schedule_slot_ratio(
+            #             'CELL1', testcase_params['schedule_slot_ratio'])
+            #         self.keysight_test_app.set_nr_schedule_tdd_pattern(
+            #             'CELL1', testcase_params.get('tdd_pattern', 0))
+            # self.keysight_test_app.set_nr_ul_dft_precoding(
+            #     'CELL1', testcase_params['transform_precoding'])
+            # self.keysight_test_app.set_nr_cell_mcs(
+            #     'CELL1', testcase_params['nr_dl_mcs_table'], testcase_params['nr_dl_mcs'],
+            #     testcase_params['nr_ul_mcs_table'],
+            #     testcase_params['nr_ul_mcs'])
             self.keysight_test_app.set_dl_carriers(
                 testcase_params['endc_combo_config']['nr_dl_carriers'])
             self.keysight_test_app.set_ul_carriers(
@@ -642,7 +641,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                         'NR5G', 'CELL1', 'CONN', 10 * (idx + 1)):
                     self.log.info('Connected! Waiting for {} seconds.'.format(
                         LONG_SLEEP))
-                    time.sleep(LONG_SLEEP)
+                    time.sleep(10*LONG_SLEEP)
                     break
                 elif idx < num_apm_toggles - 1:
                     self.log.info('Turning on airplane mode now.')
@@ -651,13 +650,18 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                 else:
                     asserts.fail('DUT did not connect to NR.')
 
+        #AWGN and fading are turned on after CELL ON and connect due to bug in UXM
+        for cell in testcase_params['endc_combo_config']['cell_list']:
+            if 'awgn_noise_level' in self.testclass_params:
+                self.keysight_test_app.enable_awgn_noise(cell['cell_type'], cell['cell_number'],
+                                                         1,
+                                                         self.testclass_params['awgn_noise_level'])
+
         if 'fading_scenario' in self.testclass_params and self.testclass_params[
                 'fading_scenario']['enable']:
             self.log.info('Enabling fading.')
             self.keysight_test_app.set_channel_emulator_state(
                 self.testclass_params['fading_scenario']['enable'])
-        else:
-            self.keysight_test_app.set_channel_emulator_state(0)
 
     def _test_throughput_bler(self, testcase_params):
         """Test function to run cellular throughput and BLER measurements.
@@ -688,6 +692,8 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
 
         # Setup tester and wait for DUT to connect
         self.setup_tester(testcase_params)
+        # Put DUT to sleep for power measurements
+        self.dut_utils.go_to_sleep()
 
         # Run throughput test loop
         stop_counter = 0
@@ -704,7 +710,7 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
             for cell in testcase_params['endc_combo_config']['cell_list']:
                 if not self.keysight_test_app.wait_for_cell_status(
                         cell['cell_type'], cell['cell_number'],
-                    ['ACT', 'CONN'], VERY_SHORT_SLEEP, VERY_SHORT_SLEEP):
+                    ['ACT', 'CONN'], LONG_SLEEP, VERY_SHORT_SLEEP):
                     connected = 0
             if not connected:
                 self.log.info('DUT lost connection to cells. Ending test.')
@@ -718,26 +724,27 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
                 cell_power_array.append(current_cell_power)
                 self.keysight_test_app.set_cell_dl_power(
                     cell['cell_type'], cell['cell_number'], current_cell_power,
-                    1)
+                    0)
             result['cell_power'] = cell_power_array
             # Start BLER and throughput measurements
             self.log.info('Cell powers: {}'.format(cell_power_array))
             self.start_single_throughput_measurement(testcase_params)
             if self.power_monitor:
                 measurement_wait = LONG_SLEEP if (power_idx == 0) else 0
-                current_average_current = self.collect_power_data(
+                average_power = self.collect_power_data(
                     self.testclass_params['traffic_duration'],
                     measurement_wait,
                     reconnect_usb=0,
                     measurement_tag=power_idx)
+                result['average_power'] = average_power
             current_throughput = self.stop_single_throughput_measurement(
                 testcase_params)
-            lte_rx_meas = self.dut_utils.get_rx_measurements('LTE')
-            nr_rx_meas = self.dut_utils.get_rx_measurements('NR5G')
             result['throughput_measurements'] = current_throughput
             self.print_throughput_result(current_throughput)
 
-            if self.testclass_params.get('log_rsrp_metrics', 1):
+            if self.testclass_params.get('log_rsrp_metrics', 1) and self.dut.is_connected():
+                lte_rx_meas = self.dut_utils.get_rx_measurements('LTE')
+                nr_rx_meas = self.dut_utils.get_rx_measurements('NR5G')
                 result['lte_rx_measurements'] = lte_rx_meas
                 result['nr_rx_measurements'] = nr_rx_meas
                 self.log.info('LTE Rx Measurements: {}'.format(lte_rx_meas))
@@ -759,9 +766,27 @@ class CellularThroughputBaseTest(base_test.BaseTestClass):
         # Save results
         self.testclass_results[self.current_test_name] = testcase_results
 
+    def dut_rockbottom(self):
+        """Set the dut to rockbottom state
+
+        """
+        # The rockbottom script might include a device reboot, so it is
+        # necessary to stop SL4A during its execution.
+        self.dut.stop_services()
+        self.log.info('Executing rockbottom script for ' + self.dut.model)
+        os.system('{} {}'.format('/root/rockbottom_km4.sh', self.dut.serial))
+        # Make sure the DUT is in root mode after coming back
+        self.dut.root_adb()
+        # Restart SL4A
+        self.dut.start_services()
+
     def test_measure_power(self):
+
+        self.dut_rockbottom()
         self.log.info('Turing screen off')
         self.dut_utils.set_screen_state(0)
+        self.dut_utils.toggle_airplane_mode(True, False)
+        self.dut_utils.go_to_sleep()
         time.sleep(10)
         self.log.info('Measuring power now.')
-        self.collect_power_data(60, 0)
+        self.collect_power_data(600, 10)

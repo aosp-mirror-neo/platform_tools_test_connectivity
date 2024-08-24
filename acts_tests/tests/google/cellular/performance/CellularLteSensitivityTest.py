@@ -69,15 +69,16 @@ class CellularLteSensitivityTest(CellularThroughputBaseTest):
                     title='Band {} ({}) - BLER Curves'.format(
                         cell_config['band'],
                         testcase_data['testcase_params']['lte_dl_mcs_table']),
-                    x_label='Cell Power (dBm)',
+                    x_label='Cell Power (dBm/SCS)',
                     primary_y_label='BLER (Mbps)')
                 test_id_rvr = test_id + tuple('RvR')
                 plots[test_id_rvr] = BokehFigure(
                     title='Band {} ({}) - RvR'.format(
                         cell_config['band'],
                         testcase_data['testcase_params']['lte_dl_mcs_table']),
-                    x_label='Cell Power (dBm)',
-                    primary_y_label='PHY Rate (Mbps)')
+                    x_label='Cell Power (dBm/SCS)',
+                    primary_y_label='PHY Rate (Mbps)',
+                    secondary_y_label='Power Consumption (mW)')
             # Compile test id data and metrics
             compiled_data[test_id]['average_throughput'].append(
                 testcase_data['average_throughput_list'])
@@ -99,6 +100,15 @@ class CellularLteSensitivityTest(CellularThroughputBaseTest):
                     testcase_data['testcase_params']['lte_dl_mcs']),
                 width=1,
                 style='dashed')
+            if self.power_monitor:
+                plots[test_id_rvr].add_line(
+                    testcase_data['cell_power_list'],
+                    testcase_data['average_power_list'],
+                    'MCS {} - Power'.format(
+                        testcase_data['testcase_params']['lte_dl_mcs']),
+                    width=1,
+                    style='dashdot',
+                    y_axis='secondary')
 
         for test_id, test_data in compiled_data.items():
             test_id_rvr = test_id + tuple('RvR')
@@ -149,6 +159,7 @@ class CellularLteSensitivityTest(CellularThroughputBaseTest):
         bler_list = []
         average_throughput_list = []
         theoretical_throughput_list = []
+        average_power_list = []
         cell_power_list = testcase_data['testcase_params']['cell_power_sweep'][
             0]
         for result in testcase_data['results']:
@@ -160,9 +171,13 @@ class CellularLteSensitivityTest(CellularThroughputBaseTest):
             theoretical_throughput_list.append(
                 result['throughput_measurements']['lte_tput_result']['total']
                 ['DL']['theoretical_tput'])
+            if self.power_monitor:
+                average_power_list.append(result['average_power'])
         padding_len = len(cell_power_list) - len(average_throughput_list)
         average_throughput_list.extend([0] * padding_len)
         theoretical_throughput_list.extend([0] * padding_len)
+        if self.power_monitor:
+            average_power_list.extend([0] * padding_len)
 
         bler_above_threshold = [
             bler > self.testclass_params['bler_threshold']
@@ -185,7 +200,9 @@ class CellularLteSensitivityTest(CellularThroughputBaseTest):
         testcase_data[
             'theoretical_throughput_list'] = theoretical_throughput_list
         testcase_data['cell_power_list'] = cell_power_list
+        testcase_data['average_power_list'] = average_power_list
         testcase_data['sensitivity'] = sensitivity
+
 
         results_file_path = os.path.join(
             context.get_current_context().get_full_output_path(),
@@ -252,6 +269,42 @@ class CellularLteSensitivityTest(CellularThroughputBaseTest):
                 test_cases.append(test_name)
         return test_cases
 
+
+class CellularLteSensitivity_QAM256_Test(CellularLteSensitivityTest):
+    """Class to test single cell LTE sensitivity"""
+
+    def __init__(self, controllers):
+        base_test.BaseTestClass.__init__(self, controllers)
+        self.testcase_metric_logger = (
+            BlackboxMappedMetricLogger.for_test_case())
+        self.testclass_metric_logger = (
+            BlackboxMappedMetricLogger.for_test_class())
+        self.publish_testcase_metrics = True
+        self.testclass_params = self.user_params['lte_sensitivity_test_params']
+        self.tests = self.generate_test_cases(list(
+            numpy.arange(27, -1, -1)),
+                                              lte_dl_mcs_table='QAM256',
+                                              lte_ul_mcs_table='QAM256',
+                                              lte_ul_mcs=4,
+                                              transform_precoding=0)
+
+class CellularLteSensitivity_QAM64_Test(CellularLteSensitivityTest):
+    """Class to test single cell LTE sensitivity"""
+
+    def __init__(self, controllers):
+        base_test.BaseTestClass.__init__(self, controllers)
+        self.testcase_metric_logger = (
+            BlackboxMappedMetricLogger.for_test_case())
+        self.testclass_metric_logger = (
+            BlackboxMappedMetricLogger.for_test_class())
+        self.publish_testcase_metrics = True
+        self.testclass_params = self.user_params['lte_sensitivity_test_params']
+        self.tests = self.generate_test_cases(list(
+            numpy.arange(27, -1, -1)),
+                                              lte_dl_mcs_table='QAM64',
+                                              lte_ul_mcs_table='QAM64',
+                                              lte_ul_mcs=4,
+                                              transform_precoding=0)
 
 class CellularLteSensitivity_SampleMCS_Test(CellularLteSensitivityTest):
     """Class to test single cell LTE sensitivity"""

@@ -316,7 +316,9 @@ class CellularFr2CpOfdmUplinkPowerSweepTest(CellularFr2UplinkPowerSweepTest):
                                               lte_dl_mcs=4,
                                               lte_dl_mcs_table='QAM64',
                                               lte_ul_mcs=4,
-                                              lte_ul_mcs_table='QAM64')
+                                              lte_ul_mcs_table='QAM64',
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
 
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
@@ -334,7 +336,9 @@ class CellularFr2CpOfdmUplinkPowerSweepTest(CellularFr2UplinkPowerSweepTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                      nr_dl_mcs_table='Q256',
+                                      nr_ul_mcs_table='Q64'))
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
                                      ['low', 'mid', 'high'], [(4, 16), (4, 25),
@@ -351,7 +355,9 @@ class CellularFr2CpOfdmUplinkPowerSweepTest(CellularFr2UplinkPowerSweepTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                      nr_dl_mcs_table='Q256',
+                                      nr_ul_mcs_table='Q64'))
 
 
 class CellularFr2DftsOfdmUplinkPowerSweepTest(CellularFr2UplinkPowerSweepTest):
@@ -375,7 +381,9 @@ class CellularFr2DftsOfdmUplinkPowerSweepTest(CellularFr2UplinkPowerSweepTest):
                                               lte_dl_mcs=4,
                                               lte_dl_mcs_table='QAM64',
                                               lte_ul_mcs=4,
-                                              lte_ul_mcs_table='QAM64')
+                                              lte_ul_mcs_table='QAM64',
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
 
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
@@ -393,7 +401,9 @@ class CellularFr2DftsOfdmUplinkPowerSweepTest(CellularFr2UplinkPowerSweepTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                      nr_dl_mcs_table='Q256',
+                                      nr_ul_mcs_table='Q64'))
         self.tests.extend(
             self.generate_test_cases(['N257', 'N258', 'N260', 'N261'],
                                      ['low', 'mid', 'high'], [(4, 16), (4, 25),
@@ -410,4 +420,6 @@ class CellularFr2DftsOfdmUplinkPowerSweepTest(CellularFr2UplinkPowerSweepTest):
                                      lte_dl_mcs=4,
                                      lte_dl_mcs_table='QAM64',
                                      lte_ul_mcs=4,
-                                     lte_ul_mcs_table='QAM64'))
+                                     lte_ul_mcs_table='QAM64',
+                                      nr_dl_mcs_table='Q256',
+                                      nr_ul_mcs_table='Q64'))

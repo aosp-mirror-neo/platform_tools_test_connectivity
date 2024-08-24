@@ -50,7 +50,9 @@ class CellularLteFr1EndcSensitivityTest(CellularThroughputBaseTest):
                                               nr_ul_mcs=4,
                                               transform_precoding=0,
                                               schedule_scenario='FULL_TPUT',
-                                              schedule_slot_ratio=80)
+                                              schedule_slot_ratio=80,
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
 
     def process_testclass_results(self):
         """Saves CSV with all test results to enable comparison."""
@@ -80,6 +82,7 @@ class CellularLteFr1EndcSensitivityTest(CellularThroughputBaseTest):
         bler_list = []
         average_throughput_list = []
         theoretical_throughput_list = []
+        average_power_list = []
         test_cell_idx = testcase_data['testcase_params']['test_cell_idx']
         test_cell_config = testcase_data['testcase_params']['endc_combo_config']['cell_list'][test_cell_idx]
         cell_power_list = testcase_data['testcase_params']['cell_power_sweep'][
@@ -104,9 +107,13 @@ class CellularLteFr1EndcSensitivityTest(CellularThroughputBaseTest):
                 theoretical_throughput_list.append(
                     result['throughput_measurements']['nr_tput_result'][test_cell_config['cell_number']]
                     ['DL']['theoretical_tput'])
+            if self.power_monitor:
+                average_power_list.append(result['average_power'])
         padding_len = len(cell_power_list) - len(average_throughput_list)
         average_throughput_list.extend([0] * padding_len)
         theoretical_throughput_list.extend([0] * padding_len)
+        average_throughput_list.extend([0] * padding_len)
+
 
         bler_above_threshold = [
             bler > self.testclass_params['bler_threshold']
@@ -137,6 +144,7 @@ class CellularLteFr1EndcSensitivityTest(CellularThroughputBaseTest):
         testcase_data[
             'theoretical_throughput_list'] = theoretical_throughput_list
         testcase_data['cell_power_list'] = cell_power_list
+        testcase_data['average_power_list'] = average_power_list
         testcase_data['sensitivity'] = sensitivity
 
         results_file_path = os.path.join(
@@ -246,4 +254,6 @@ class CellularLteFr1EndcSensitivity_SampleMCS_Test(CellularLteFr1EndcSensitivity
                                               nr_ul_mcs=4,
                                               transform_precoding=0,
                                               schedule_scenario='FULL_TPUT',
-                                              schedule_slot_ratio=80)
+                                              schedule_slot_ratio=80,
+                                              nr_dl_mcs_table='Q256',
+                                              nr_ul_mcs_table='Q64')
