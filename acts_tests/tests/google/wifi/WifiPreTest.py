@@ -100,10 +100,13 @@ class WifiPreTest(WifiBaseTest):
         openwrt.ssh = connection.SshConnection(openwrt.ssh_settings)
         openwrt.ssh.setup_master_ssh()
         return True
-      except (paramiko.ssh_exception.NoValidConnectionsError,
-              paramiko.ssh_exception.AuthenticationException,
-              paramiko.ssh_exception.SSHException,
-              TimeoutError) as e:
+      except (
+          paramiko.ssh_exception.NoValidConnectionsError,
+          paramiko.ssh_exception.AuthenticationException,
+          paramiko.ssh_exception.SSHException,
+          connection.Error,
+          TimeoutError,
+      ) as e:
         logging.info(f"Connection error: {e}, reconnecting {ip} "
                       f"in {retry_duration} seconds.")
         time.sleep(_POLL_AP_RETRY_INTERVAL_SEC)
@@ -131,7 +134,7 @@ class WifiPreTest(WifiBaseTest):
         for radio in radios:
           ssid_radio_map = openwrt.get_ifnames_for_ssids(radio)
           for ssid, radio_ifname in ssid_radio_map.items():
-              openwrt.log.info(f"{radio_ifname}:  {ssid}")
+            openwrt.log.info(f"{radio_ifname}:  {ssid}")
 
         band_bssid_map = openwrt.get_bssids_for_wifi_networks()
         openwrt.log.info(band_bssid_map)
