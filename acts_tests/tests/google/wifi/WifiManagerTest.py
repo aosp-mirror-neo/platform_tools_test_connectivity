@@ -116,6 +116,8 @@ class WifiManagerTest(WifiBaseTest):
             ad.droid.wakeLockRelease()
             ad.droid.goToSleepNow()
         self.turn_location_off_and_scan_toggle_off()
+        self.dut.adb.shell("cmd bluetooth_manager enable")
+        self.dut.adb.shell("cmd bluetooth_manager wait-for-state:STATE_ON")
         if self.dut.droid.wifiIsApEnabled():
             wutils.stop_wifi_tethering(self.dut)
         for ad in self.android_devices:
@@ -1320,3 +1322,30 @@ class WifiManagerTest(WifiBaseTest):
                                 " setCoexUnsafeChannels")
 
         self.dut.droid.wifiUnregisterCoexCallback()
+
+    def test_reboot_bluetooth_off_location_off(self):
+        """
+        Toggle bluetooth and location OFF then reboot and test wifi connection.
+
+        Steps:
+        1. Toggle bluetooth and location OFF
+        2. Reboot device
+        3. Connect to a 2GHz network and verify internet connection
+        4. Connect to a 5GHz network and verify internet connection
+        """
+        self.log.info("Toggling location and bluetooth OFF")
+        acts.utils.set_location_service(self.dut, False)
+        self.dut.adb.shell("cmd bluetooth_manager disable")
+        self.dut.adb.shell("cmd bluetooth_manager wait-for-state:STATE_OFF")
+
+        self.dut.reboot()
+        time.sleep(DEFAULT_TIMEOUT)
+        self.dut.adb.shell("cmd bluetooth_manager wait-for-state:STATE_OFF")
+
+        wutils.connect_to_wifi_network(self.dut, self.wpa_networks[0]["2g"])
+        wutils.verify_11ax_wifi_connection(
+            self.dut, self.wifi6_models, "wifi6_ap" in self.user_params)
+
+        wutils.connect_to_wifi_network(self.dut, self.wpa_networks[0]["5g"])
+        wutils.verify_11ax_wifi_connection(
+            self.dut, self.wifi6_models, "wifi6_ap" in self.user_params)

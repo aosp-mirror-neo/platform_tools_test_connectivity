@@ -63,6 +63,13 @@ class WirelessSettingsApplier(object):
     self.ssh.run("uci set wireless.%s.channel='%s'" % (self.radio_5g, self.channel_5g))
     if self.channel_5g == 165:
       self.ssh.run("uci set wireless.%s.htmode='VHT20'" % self.radio_5g)
+    elif self.channel_5g in [64]:
+      self.ssh.run("iw reg set IN")
+      self.ssh.run("uci set wireless.%s.htmode='VHT40'" % self.radio_5g)
+    elif self.channel_5g in [144]:
+      self.ssh.run("iw reg set RU")
+      self.ssh.run("uci set wireless.%s.htmode='VHT40'" % self.radio_5g)
+      self.ssh.run("uci set wireless.%s.country3=0x49" % self.radio_5g)
     elif self.channel_5g in [149,153,157,161,165]:
       self.ssh.run("iw reg set US")
     elif self.channel_5g == 132 or self.channel_5g == 136:

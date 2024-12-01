@@ -123,6 +123,7 @@ class WifiSoftApTest(WifiBaseTest):
         self.dut.log.debug("Toggling Airplane mode OFF.")
         asserts.assert_true(utils.force_airplane_mode(self.dut, False),
                             "Can not turn off airplane mode: %s" % self.dut.serial)
+        self.dut.adb.shell("cmd wifi reset-coex-cell-channels")
         if self.dut.droid.wifiIsApEnabled():
             wutils.stop_wifi_tethering(self.dut)
         if "chan_13" in self.test_name and "OpenWrtAP" in self.user_params:
@@ -1342,6 +1343,28 @@ class WifiSoftApTest(WifiBaseTest):
         softap_channel = wutils.WifiEnums.freq_to_channel[conn_info["frequency"]]
         asserts.assert_true(softap_channel == 13,
                             "Dut client did not connect to softAp on channel 13")
+
+    def test_softap_2G_two_clients_ping_each_other_with_lte_coex(self):
+        """Test for 2G hotspot with 2 clients when lte coex applied
+
+        1. Set country code as TW and set lte coex channels
+        2. Turn on 2G hotspot
+        3. Two clients connect to the hotspot
+        4. Two clients ping each other
+        """
+
+        asserts.skip_if(self.dut.model not in self.sim_supported_models,
+                        "Device does not support SIM card, softAp not applicable.")
+        asserts.skip_if(len(self.android_devices) < 3,
+                        "No extra android devices. Skip test")
+
+        wutils.set_wifi_country_code(self.dut, "TW")
+        self.dut.adb.shell("cmd wifi set-coex-cell-channels "
+                           "lte 7 2650000 20000 2530000 20000 "
+                           "lte 3 1860000 10000 -1 0 "
+                           "lte 8 955000 10000 -1 0 "
+                           "lte 7 2685000 10000 -1 0")
+        self.validate_full_tether_startup(WIFI_CONFIG_APBAND_2G, test_clients=True)
 
     """ Tests End """
 
