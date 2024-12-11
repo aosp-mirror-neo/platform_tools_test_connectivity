@@ -422,7 +422,7 @@ class WifiStressTest(WifiBaseTest):
             "https://www.youtube.com/watch?v=WNCl-69POro",
             "https://www.youtube.com/watch?v=dVkK36KOcqs",
             "https://www.youtube.com/watch?v=0wCC3aLXdOw",
-            "https://www.youtube.com/watch?v=QpyGNwnEmKo",
+            "https://www.youtube.com/watch?v=rN6nlNC9WQA",
             "https://www.youtube.com/watch?v=RK1K2bCg4J8"
         ]
         try:
