@@ -33,6 +33,7 @@ WIFI_CONFIG_APBAND_AUTO = WifiEnums.WIFI_CONFIG_APBAND_AUTO
 WPA3_SAE_TRANSITION_SOFTAP = WifiEnums.SoftApSecurityType.WPA3_SAE_TRANSITION
 WPA3_SAE_SOFTAP = WifiEnums.SoftApSecurityType.WPA3_SAE
 WAIT_AFTER_REBOOT = 10
+WAIT_AFTER_SOFTAP_RESUME = 10
 
 
 class WifiSoftApTest(WifiBaseTest):
@@ -289,6 +290,7 @@ class WifiSoftApTest(WifiBaseTest):
         self.dut.reboot()
         time.sleep(WAIT_AFTER_REBOOT)
         wutils.start_wifi_tethering_saved_config(self.dut)
+        time.sleep(WAIT_AFTER_SOFTAP_RESUME)
         wutils.connect_to_wifi_network(self.dut_client, config, hidden=hidden)
 
     """ Tests Begin """
