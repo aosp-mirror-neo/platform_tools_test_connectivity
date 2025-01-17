@@ -320,7 +320,7 @@ class WifiStaApConcurrencyTest(WifiBaseTest):
         Switch DUT SoftAp to 5G band if currently in 2G.
         Switch DUT SoftAp to 2G band if currently in 5G.
         """
-        wlan1_freq = int(self.get_wlan1_status(self.dut)['freq'])
+        wlan1_freq = int(self.get_sap_interface_status(self.dut)['freq'])
         if wlan1_freq in wutils.WifiEnums.ALL_5G_FREQUENCIES:
             band = WIFI_CONFIG_APBAND_2G
         elif wlan1_freq in wutils.WifiEnums.ALL_2G_FREQUENCIES:
@@ -328,12 +328,15 @@ class WifiStaApConcurrencyTest(WifiBaseTest):
         wutils.stop_wifi_tethering(ad)
         self.start_softap_and_verify(band)
 
-    def get_wlan1_status(self, ad):
-        """ get wlan1 interface status"""
-        get_wlan1 = 'hostapd_cli status'
-        out_wlan1 = ad.adb.shell(get_wlan1)
-        out_wlan1 = dict(re.findall(r'(\S+)=(".*?"|\S+)', out_wlan1))
-        return out_wlan1
+    def get_sap_interface_status(self, ad):
+        """ get SAP interface status"""
+        sap_interface = "wlan1"
+        if self.dut.model in self.dbs_supported_models:
+            sap_interface = "wlan2"
+        get_sap_interface_status = f"hostapd_cli -p /data/vendor/wifi/hostapd/ctrl_{sap_interface} status"
+        out_sap_interface_status = ad.adb.shell(get_sap_interface_status)
+        out_sap_interface_status = dict(re.findall(r'(\S+)=(".*?"|\S+)', out_sap_interface_status))
+        return out_sap_interface_status
 
     def enable_mobile_data(self, ad):
         """Make sure that cell data is enabled if there is a sim present."""
