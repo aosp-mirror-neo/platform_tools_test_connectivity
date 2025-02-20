@@ -15,6 +15,7 @@
 #   limitations under the License.
 
 import collections
+import csv
 import itertools
 import json
 import logging
@@ -240,6 +241,7 @@ class WifiRssiTest(base_test.BaseTestClass):
              ('scan_rssi', {}),
              ('chain_0_rssi', {}),
              ('chain_1_rssi', {}),
+             ('reported_rssi', {}),
              ('total_attenuation', []),
              ('predicted_rssi', [])])
         # yapf: enable
@@ -322,6 +324,10 @@ class WifiRssiTest(base_test.BaseTestClass):
                         'Chain 1 RSSI',
                         marker='circle')
         figure.add_line(postprocessed_results['total_attenuation'],
+                        postprocessed_results['reported_rssi']['mean'],
+                        'Reported RSSI',
+                        marker='circle')
+        figure.add_line(postprocessed_results['total_attenuation'],
                         postprocessed_results['predicted_rssi'],
                         'Predicted RSSI',
                         marker='circle')
@@ -353,6 +359,7 @@ class WifiRssiTest(base_test.BaseTestClass):
              ('scan_rssi', []),
              ('chain_0_rssi', []),
              ('chain_1_rssi', []),
+             ('reported_rssi', []),
              ('predicted_rssi', [])])
         # yapf: enable
         for key, val in rssi_time_series.items():
@@ -395,7 +402,8 @@ class WifiRssiTest(base_test.BaseTestClass):
         Args:
             postprocessed_results: compiled arrays of RSSI data
         """
-        monitored_rssis = ['signal_poll_rssi', 'chain_0_rssi', 'chain_1_rssi']
+        monitored_rssis = ['signal_poll_rssi', 'chain_0_rssi', 'chain_1_rssi',
+                           'reported_rssi']
 
         rssi_dist = collections.OrderedDict()
         for rssi_key in monitored_rssis:
@@ -422,13 +430,8 @@ class WifiRssiTest(base_test.BaseTestClass):
                              secondary_y_label='p(RSSI <= x)')
         for rssi_key, rssi_data in rssi_dist.items():
             figure.add_line(x_data=rssi_data['rssi_values'],
-                            y_data=rssi_data['rssi_pdf'],
-                            legend='{} PDF'.format(rssi_key),
-                            y_axis='default')
-            figure.add_line(x_data=rssi_data['rssi_values'],
                             y_data=rssi_data['rssi_cdf'],
-                            legend='{} CDF'.format(rssi_key),
-                            y_axis='secondary')
+                            legend='{} CDF'.format(rssi_key))
         output_file_path = os.path.join(self.log_path,
                                         self.current_test_name + '_dist.html')
         figure.generate_figure(output_file_path)
@@ -565,6 +568,14 @@ class WifiRssiTest(base_test.BaseTestClass):
             self.dut.droid.wakeLockAcquireDim()
         else:
             self.dut.go_to_sleep()
+        tune_code = None
+        if 'tune_code' in testcase_params:
+            tune_code= testcase_params['tune_code']
+        elif 'tune_code' in self.testbed_params and int(self.testbed_params['tune_code']['manual_tune_code']):
+            tune_code = self.testbed_params['tune_code'][testcase_params['band']]
+        if tune_code:
+            self.log.info('Forcing antenna tune code.')
+            wputils.write_antenna_tune_code(self.dut, tune_code, readback_check=False)
         if wputils.validate_network(self.dut,
                                     testcase_params['test_network']['SSID']):
             self.log.info('Already connected to desired network')
@@ -1111,3 +1122,51 @@ class WifiOtaRssi_TenDegree_Test(WifiOtaRssiTest):
                                               ['ActiveTraffic'],
                                               ['orientation'],
                                               list(range(0, 360, 10)))
+
+class WifiOtaRssi_TuneCodeSweep_Test(WifiOtaRssiTest):
+
+    def __init__(self, controllers):
+        WifiRssiTest.__init__(self, controllers)
+        self.tests = self.generate_test_cases('test_rssi_variation',
+                                              [6, 36, 149, '6g37'],
+                                              ['bw20', 'bw80', 'bw160'],
+                                              ['ActiveTraffic'],
+                                              'StirrersOn', 0)
+
+    def generate_test_cases(self, test_type, channels, modes, traffic_modes,
+                            chamber_mode, orientation):
+        test_cases = []
+        allowed_configs = {
+            20: [
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 36, 40, 44, 48, 64, 100,
+                116, 132, 140, 149, 153, 157, 161, '6g37', '6g117', '6g213'
+            ],
+            40: [36, 44, 100, 149, 157, '6g37', '6g117', '6g213'],
+            80: [36, 100, 149, '6g37', '6g117', '6g213'],
+            160: [36, '6g37', '6g117', '6g213']
+        }
+        with open(self.user_params['testbed_params']['tune_code_file'],
+                  'r') as csvfile:
+            tune_code_configs = csv.DictReader(csvfile)
+            for (tune_code_config, channel, mode, traffic,
+                 ) in itertools.product(tune_code_configs, channels, modes, traffic_modes,
+
+                                                 ):
+                bandwidth = int(''.join([x for x in mode if x.isdigit()]))
+                if channel not in allowed_configs[bandwidth]:
+                    continue
+                test_name = test_type + '_ch{}_{}_{}_tc_{}'.format(
+                    channel, mode, traffic, tune_code_config['band'])
+                testcase_params = collections.OrderedDict(
+                    channel=channel,
+                    mode=mode,
+                    active_traffic=(traffic == 'ActiveTraffic'),
+                    traffic_type=self.user_params['rssi_test_params']
+                    ['traffic_type'],
+                    chamber_mode=chamber_mode,
+                    orientation=orientation,
+                    tune_code = tune_code_config)
+                test_function = self._test_ota_rssi
+                setattr(self, test_name, partial(test_function, testcase_params))
+                test_cases.append(test_name)
+        return test_cases
