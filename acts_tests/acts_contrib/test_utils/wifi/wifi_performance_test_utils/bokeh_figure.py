@@ -19,6 +19,7 @@ import collections
 import itertools
 import json
 import math
+import numpy
 from acts_contrib.test_utils.wifi import wifi_performance_test_utils as wputils
 
 
@@ -123,22 +124,25 @@ class BokehFigure():
         self.plot.add_tools(
             bokeh.models.tools.WheelZoomTool(dimensions='height'))
 
-    def _filter_line(self, x_data, y_data, hover_text=None):
+    def _filter_line(self, x_data, y_data, hover_text=None, error_bars=[]):
         """Function to remove NaN points from bokeh plots."""
         x_data_filtered = []
         y_data_filtered = []
+        error_bars_data_filtered = []
         hover_text_filtered = {}
         for idx, xy in enumerate(
-                itertools.zip_longest(x_data, y_data, fillvalue=float('nan'))):
+                itertools.zip_longest(x_data, y_data, error_bars, fillvalue=float('nan'))):
             if not math.isnan(xy[1]):
                 x_data_filtered.append(xy[0])
                 y_data_filtered.append(xy[1])
+                if len(error_bars)>0:
+                    error_bars_data_filtered.append(xy[2])
                 if hover_text:
                     for key, value in hover_text.items():
                         hover_text_filtered.setdefault(key, [])
                         hover_text_filtered[key].append(
                             value[idx] if len(value) > idx else '')
-        return x_data_filtered, y_data_filtered, hover_text_filtered
+        return x_data_filtered, y_data_filtered, hover_text_filtered, error_bars_data_filtered
 
     def add_line(self,
                  x_data,
@@ -151,6 +155,7 @@ class BokehFigure():
                  marker=None,
                  marker_size=10,
                  shaded_region=None,
+                 error_bars=[],
                  y_axis='default'):
         """Function to add line to existing BokehFigure.
 
@@ -175,8 +180,8 @@ class BokehFigure():
             style = [5, 5]
         if isinstance(hover_text, list):
             hover_text = {'info': hover_text}
-        x_data_filter, y_data_filter, hover_text_filter = self._filter_line(
-            x_data, y_data, hover_text)
+        x_data_filter, y_data_filter, hover_text_filter, error_bars_filter = self._filter_line(
+            x_data, y_data, hover_text, error_bars)
         self.figure_data.append({
             'x_data': x_data_filter,
             'y_data': y_data_filter,
@@ -188,6 +193,7 @@ class BokehFigure():
             'marker': marker,
             'marker_size': marker_size,
             'shaded_region': shaded_region,
+            'error_bars': error_bars_filter,
             'y_axis': y_axis
         })
         self.fig_property['num_lines'] += 1
@@ -243,7 +249,7 @@ class BokehFigure():
         """
         self.init_plot()
         two_axes = False
-        for line in self.figure_data:
+        for line_idx, line in enumerate(self.figure_data):
             data_dict = {'x': line['x_data'], 'y': line['y_data']}
             for key, value in line['hover_text'].items():
                 data_dict[key] = value
@@ -268,6 +274,14 @@ class BokehFigure():
                                 color='#7570B3',
                                 line_alpha=0.1,
                                 fill_alpha=0.1)
+            if line['error_bars']:
+                data_dict = {'base': numpy.add(line['x_data'], (pow(-1,line_idx)*0.01*line_idx)/self.fig_property['num_lines']),
+                             'lower': numpy.subtract(line['y_data'],line['error_bars']),
+                             'upper': numpy.add(line['y_data'],line['error_bars']),}
+                source_error = bokeh.models.ColumnDataSource(data=data_dict)
+                self.plot.add_layout(
+                    bokeh.models.Whisker(source=source_error, base="base", upper="upper", lower="lower", line_color=line['color'])
+                )
             if line['marker'] in self.MARKERS:
                 marker_func = getattr(self.plot, line['marker'])
                 marker_func(x='x',

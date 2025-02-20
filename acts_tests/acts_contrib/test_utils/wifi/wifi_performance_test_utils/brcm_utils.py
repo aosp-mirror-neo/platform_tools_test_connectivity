@@ -23,6 +23,7 @@ import numpy
 import re
 import statistics
 import time
+from acts_contrib.test_utils.wifi import wifi_test_utils as wutils
 
 VERY_SHORT_SLEEP = 0.5
 SHORT_SLEEP = 1
@@ -739,3 +740,253 @@ class LinkLayerStats():
             self.llstats_incremental)
         self.llstats_cumulative['summary'] = self._generate_stats_summary(
             self.llstats_cumulative)
+
+
+class RangingLink():
+    def __init__(self, initiator, responder):
+        self.initiator_dut = initiator
+        self.responder_dut = responder
+        self.soft_ap_mac_address = '00:12:32:45:76:85'
+        self.SUPPORTED_BANDWIDTHS = [20, 40, 80, 160]
+
+    def reset_device(self, dut, associate):
+        if associate:
+            # dut.adb.shell('echo 1 > /sys/wifi/wl_accel_force_reg_on')
+            # time.sleep(SHORT_SLEEP)
+            # dut.adb.shell('ifconfig wlan0 down')
+            # time.sleep(MED_SLEEP)
+            # dut.adb.shell('echo 1 > /sys/wifi/wl_accel_force_reg_on')
+            # time.sleep(SHORT_SLEEP)
+            # dut.adb.shell('ifconfig wlan0 up')
+            # time.sleep(MED_SLEEP)
+            dut.adb.shell('wl down')
+            time.sleep(MED_SLEEP)
+            dut.adb.shell('wl up')
+
+        else:
+            dut.adb.shell('wl down')
+            time.sleep(MED_SLEEP)
+            dut.adb.shell('wl up')
+
+    def get_ap_intf(self, soft_ap_output):
+        """Reads the AP interface from a file"""
+        SOFT_AP_REGEX = r"ifname:\s*(.*?)\s"
+        match = re.search(SOFT_AP_REGEX, soft_ap_output)
+        if match:
+            return match.group(1)
+        else:
+            raise RuntimeError('Could not find soft ap interface')
+
+    def setup_soft_ap(self, channel, bandwidth, ranging_method, az_enabled):
+
+        """Sets up a Soft-AP on responder DUT"""
+        # To allow DFS channels
+        self.responder_dut.adb.shell('wl down')
+        self.responder_dut.adb.shell('wl spect 0')
+        self.responder_dut.adb.shell('wl up')
+
+        # Create AP interface
+        # added for 11az
+        soft_ap_out = self.responder_dut.adb.shell('wl interface_create ap -m {}'.format(self.soft_ap_mac_address))
+        self.soft_ap_interface = self.get_ap_intf(soft_ap_out)
+        time.sleep(SHORT_SLEEP)
+        # if ranging_method == '11mc':
+        #     self.responder_dut.adb.shell('wl -i {} chanspec {}/{}'.format(self.soft_ap_interface, channel, bandwidth))
+        #elif ranging_method == '11az':
+        self.responder_dut.adb.shell('wl -i {} bss down'.format(self.soft_ap_interface))
+        time.sleep(SHORT_SLEEP)
+        if channel < 13:
+            self.responder_dut.adb.shell('wl -i {} chanspec {}'.format(self.soft_ap_interface, channel))
+        else:
+            self.responder_dut.adb.shell('wl -i {} chanspec {}/{}'.format(self.soft_ap_interface, channel, bandwidth))
+        time.sleep(SHORT_SLEEP)
+        self.responder_dut.adb.shell('wl -i {} oce fd_tx_duration 0'.format(self.soft_ap_interface))
+        time.sleep(SHORT_SLEEP)
+        self.responder_dut.adb.shell('wl -i {} up'.format(self.soft_ap_interface))
+        time.sleep(SHORT_SLEEP)
+        self.responder_dut.adb.shell("wl -i {} ssid testftm".format(self.soft_ap_interface))
+        time.sleep(SHORT_SLEEP)
+        self.responder_dut.adb.shell('wl -i {} status'.format(self.soft_ap_interface))
+        if 'one_sided' not in ranging_method:
+            self.enable_ranging_at_responder(bandwidth, az_enabled)
+        self.test_network = {"SSID": "testftm"}
+
+    def check_soft_ap_status(self):
+        return self.responder_dut.adb.shell('wl -i {} status'.format(self.soft_ap_interface))
+
+    def enable_ranging_at_responder(self, bandwidth_11az, az_enabled=1):
+        BW_MAPPING = {160: 5, 80: 2, 40: 1, 20: 0}
+        self.responder_dut.adb.shell('wl -i {} scansuppress 1'.format(self.soft_ap_interface))
+        self.responder_dut.adb.shell('wl scansuppress 1')
+        self.responder_dut.adb.shell('wl -i {} ftm enable'.format(self.soft_ap_interface))
+        if az_enabled:
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config min-delta 100ms'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config max-delta 500ms'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config format-bw {}'.format(self.soft_ap_interface,
+                                                                                       BW_MAPPING[bandwidth_11az]))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config num-meas 100'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config max-i2r-sts-leq-80 2'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config max-r2i-sts-leq-80 2'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config max-i2r-sts-gt-80 2'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config max-r2i-sts-gt-80 2'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config max-i2r-rep 0'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config max-r2i-rep 0'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config options -sec-ltf-supported'.format(self.soft_ap_interface))
+            self.responder_dut.adb.shell('wl -i {} ftm ntb config options -sec-ltf-required'.format(self.soft_ap_interface))
+
+
+    def enable_ranging_at_initiator(self):
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm enable')
+
+    def setup_ranging_link(self, channel, bandwidth, associate_initiator=0, ranging_method='11mc', az_enabled=1, country_code='US'):
+        self.reset_device(self.initiator_dut, associate_initiator)
+        self.reset_device(self.responder_dut, associate_initiator)
+        wutils.set_wifi_country_code(self.initiator_dut, country_code)
+        wutils.set_wifi_country_code(self.responder_dut, country_code)
+
+        self.setup_soft_ap(channel, bandwidth, ranging_method, az_enabled)
+        if associate_initiator:
+            #self.initiator_dut.adb.shell('wl -i wlan0 join testftm')
+            self.initiator_dut.adb.shell('cmd wifi connect-network testftm open')
+            associated = 0
+            for idx in range(10):
+                status = self.initiator_dut.adb.shell('wl -i wlan0 status')
+                if 'testftm' in status:
+                    associated = 1
+                    break
+                else:
+                    time.sleep(SHORT_SLEEP)
+            if not associated:
+                raise RuntimeError('Could not connect to soft AP.')
+        self.enable_ranging_at_initiator()
+
+    def run_single_11mc_range(self, channel, bandwidth, no_meas_frames=8, one_sided = 0, ant_diversity = 0):
+        """Triggers the 11mc ranging measurements"""
+        # TODO: Debug why an extra 'wl -i wlan0 proxd ftm 1 delete' is often needed here on P22
+        self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config burst-duration 128')
+        self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config burst-timeout 128')
+        self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config ftm-sep 3400us')
+        if one_sided:
+            self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config options +randmac +auto-vhtack')
+            self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config options +initiator +no_scan_cache +one-way')
+        else:
+            self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config options +initiator +randmac +auto-vhtack')
+        if ant_diversity:
+            self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config options +ant_diversity')
+            self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config ant_div_mode 1')
+        if channel < 13:
+            self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config chanspec {}'.format(channel))
+        else:
+            self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config chanspec {}/{}'.format(channel, bandwidth))
+        self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config peer {}'.format(self.soft_ap_mac_address))
+        self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 config num-ftm {}'.format(no_meas_frames))
+        self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 start')
+        time.sleep(VERY_SHORT_SLEEP)
+        result = self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 result')
+        result = self.parse_11mc_ranging_result(result)
+        self.initiator_dut.adb.shell('wl -i wlan0 proxd ftm 1 delete')
+        return result
+
+    def run_single_11az_range(self, channel, bandwidth, no_meas_frames=8):
+        BW_MAPPING = {160: 5, 80: 2, 40: 1, 20: 0}
+        # result = self.initiator_dut.adb.shell('halutil -rtt -sta {} {} {} 0 3'.format(
+        #     self.soft_ap_mac_address, channel, BW_MAPPING[bandwidth]))
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb 1 config chanspec {}/{}'.format(channel, bandwidth))
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb 1 config peer {}'.format(self.soft_ap_mac_address))
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb 1 config options +initiator')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config min-delta 100ms')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config max-delta 1s')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config format-bw {}'.format(BW_MAPPING[bandwidth]))
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config num-meas {}'.format(no_meas_frames))
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config max-i2r-sts-leq-80 2')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config max-r2i-sts-leq-80 2')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config max-i2r-sts-gt-80 2')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config max-r2i-sts-gt-80 2')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config max-i2r-rep 0')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config max-r2i-rep 0')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config options -sec-ltf-supported')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm ntb config options -sec-ltf-required')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm 1 start')
+        time.sleep(no_meas_frames*VERY_SHORT_SLEEP)
+        result = self.initiator_dut.adb.shell('wl -i wlan0 ftm 1 result')
+        result = self.parse_11az_ranging_result(result)
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm 1 result')
+        self.initiator_dut.adb.shell('wl -i wlan0 ftm 1 delete')
+        return result
+
+
+    def measure_range(self, num_iterations, channel, bandwidth, no_meas_frames=8, ranging_method='11mc', ant_diversity=0, verbose = 1):
+        ranging_results = {'raw_results': [], 'compiled_results': {}, 'summary': {}}
+        try:
+            logging.info(self.check_soft_ap_status())
+        except:
+            logging.warning('Soft AP may have crashed.')
+        try:
+            association_status = self.initiator_dut.adb.shell('wl status')
+            logging.info(association_status)
+            if 'testftm' not in association_status:
+                logging.warning('Initiator DUT may have disconnected from AP')
+        except:
+            logging.warning('Initiator DUT may have disconnected from AP')
+        for idx in range(num_iterations):
+            try:
+                logging.debug(self.check_soft_ap_status())
+            except:
+                logging.debug('Soft AP may have crashed.')
+            if '11mc' in ranging_method:
+                one_sided = ('one_sided' in ranging_method)
+                result = self.run_single_11mc_range(channel, bandwidth, no_meas_frames, one_sided=one_sided, ant_diversity=ant_diversity)
+            elif ranging_method == '11az':
+                result = self.run_single_11az_range(channel, bandwidth, no_meas_frames)
+            ranging_results['raw_results'].append(result)
+            if verbose:
+                logging.info(result)
+        ranging_results['compiled_results']['distance'] = [x['avg_dist'] for x in ranging_results['raw_results']]
+        ranging_results['compiled_results']['std_dev'] = [x['std_deviation'] for x in ranging_results['raw_results']]
+        ranging_results['compiled_results']['rtt'] = [x['rtt'] for x in ranging_results['raw_results']]
+        ranging_results['compiled_results']['rssi'] = [x['rssi'] for x in ranging_results['raw_results']]
+
+        ranging_results['summary']['avg_distance'] = numpy.mean(ranging_results['compiled_results']['distance'])
+        ranging_results['summary']['std_dev_distance'] = numpy.std(ranging_results['compiled_results']['distance'])
+        ranging_results['summary']['avg_rtt'] = numpy.mean(ranging_results['compiled_results']['rtt'])
+        ranging_results['summary']['std_dev_rtt'] = numpy.std(ranging_results['compiled_results']['rtt'])
+        ranging_results['summary']['avg_rssi'] = numpy.mean(ranging_results['compiled_results']['rssi'])
+        ranging_results['summary']['std_dev_rssi'] = numpy.std(ranging_results['compiled_results']['rssi'])
+        return ranging_results
+
+    def parse_11mc_ranging_result(self, ranging_output):
+        pattern = r"(\w+)[ :=]+([-:.x\d]+)"
+        matches = re.findall(pattern, ranging_output, re.MULTILINE)
+        matches = dict(matches)
+        numerical_fields = ['sessionId', 'state', 'status','avg_dist', 'burst_duration', 'burst_num', 'valid_measure_cnt',
+                            'num_ftm', 'num_measurements', 'snr', 'bitflips','rtt', 'rssi', 'std_deviation']
+        for key in numerical_fields:
+            matches[key]=float(matches[key])
+        return matches
+
+    def parse_11az_ranging_result(self, ranging_output):
+        pattern = r"(\w+)[ :=]+([-:.x\d]+)"
+        matches = re.findall(pattern, ranging_output, re.MULTILINE)
+        matches = dict(matches)
+        # numerical_fields = ['burst_num', 'measurement_number', 'success_number', 'number_per_burst_peer',
+        #                     'status', 'retry_after_duration', 'type', 'rssi', 'rx_rate', 'rtt', 'rtt_sd', 'distance',
+        #                     'burst_duration', 'negotiated_burst_num', 'frequency', 'packet_bw',
+        #                     'i2r_tx_ltf_repetition_cnt', 'r2i_tx_ltf_repetition_cnt']
+        numerical_fields = ['id', 'status', 'state', 'rtt_mean', 'rtt_sd', 'distance', 'rssi_mean']
+        result = {}
+        for key in numerical_fields:
+            result[key] = float(matches[key])
+        result['avg_dist'] = result['distance']
+        result['std_deviation'] = result['rtt_sd']
+        result['rtt'] = result['rtt_mean']
+        result['rssi'] = result['rssi_mean']
+        return result
+
+    def cleanup_soft_ap(self):
+        """Cleans up the soft-AP interface"""
+        self.responder_dut.adb.shell('wl -i {} interface_remove'.format(self.soft_ap_interface))
+        self.responder_dut.adb.shell('wl scansuppress 0')
+
+    def teardown_ranging_link(self):
+        self.initiator_dut.adb.shell('wl -i wlan0 disassoc')
+        self.cleanup_soft_ap()

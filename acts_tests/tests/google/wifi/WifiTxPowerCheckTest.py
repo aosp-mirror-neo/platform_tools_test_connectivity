@@ -136,8 +136,14 @@ class WifiTxPowerCheckTest(base_test.BaseTestClass):
                              "Failed to enable WiFi verbose logging.")
 
         # decode nvram
-        self.nvram_sar_data = self.read_nvram_sar_data()
-        self.csv_sar_data = self.read_sar_csv(self.testclass_params['sar_csv'])
+        try:
+            self.nvram_sar_data = self.read_nvram_sar_data()
+        except:
+            self.nvram_sar_data = None
+        if 'sar_csv' in self.testclass_params:
+            self.csv_sar_data = self.read_sar_csv(self.testclass_params['sar_csv'])
+        else:
+            self.csv_sar_data = None
 
         # Configure test retries
         self.user_params['retry_tests'] = [self.__class__.__name__]
@@ -372,7 +378,10 @@ class WifiTxPowerCheckTest(base_test.BaseTestClass):
             testcase_params['sar_state']]['brcm_index'][0], current_band,
                       'mimo', self.sar_state_mapping[
                           testcase_params['sar_state']]['brcm_index'][1])
-        sar_powers = self.nvram_sar_data[sar_config][sub_band_idx - 1]
+        if self.nvram_sar_data:
+            sar_powers = self.nvram_sar_data[sar_config][sub_band_idx - 1]
+        else:
+            sar_powers = [float('nan'), float('nan')]
         return sar_config, sar_powers
 
     def get_sar_power_from_csv(self, testcase_params):
@@ -403,12 +412,15 @@ class WifiTxPowerCheckTest(base_test.BaseTestClass):
                 sub_band_idx = band[1]
                 break
         sar_config = (reg_domain, 'mimo', current_band)
-        sar_powers = [
-            self.csv_sar_data[testcase_params['sar_state']]['SAR Powers']
-            [sar_config][0][sub_band_idx - 1],
-            self.csv_sar_data[testcase_params['sar_state']]['SAR Powers']
-            [sar_config][1][sub_band_idx - 1]
-        ]
+        if self.csv_sar_data:
+            sar_powers = [
+                self.csv_sar_data[testcase_params['sar_state']]['SAR Powers']
+                [sar_config][0][sub_band_idx - 1],
+                self.csv_sar_data[testcase_params['sar_state']]['SAR Powers']
+                [sar_config][1][sub_band_idx - 1]
+            ]
+        else:
+            sar_powers = [float('nan'), float('nan')]
         return sar_config, sar_powers
 
     def process_wl_curpower(self, wl_curpower_file, testcase_params):
@@ -971,7 +983,7 @@ class WifiTxPowerCheck_BasicSAR_Test(WifiTxPowerCheckTest):
         self.tests = self.generate_test_cases(
             ap_power='standard',
             channels=[6, 36, 52, 100, 149, '6g37'],
-            modes=['bw20', 'bw160'],
+            modes=['bw20', 'bw80', 'bw160'],
             test_types=[
                 'test_tx_power',
             ],
