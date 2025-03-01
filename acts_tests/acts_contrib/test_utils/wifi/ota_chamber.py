@@ -267,6 +267,7 @@ class BluetestChamber(OtaChamber):
         self.set_stirrer_pos(2, orientation * 100 / 360)
 
     def start_continuous_stirrers(self):
+        self.log.info('Start continuous stirrer sweep.')
         if self.current_mode != 'continuous':
             self._init_continuous_mode()
         self.chamber.chamber_stirring_continuous_start()

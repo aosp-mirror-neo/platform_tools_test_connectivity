@@ -333,7 +333,7 @@ class WifiStaApConcurrencyTest(WifiBaseTest):
         sap_interface = "wlan1"
         if self.dut.model in self.dbs_supported_models:
             sap_interface = "wlan2"
-        get_sap_interface_status = f"hostapd_cli -p /data/vendor/wifi/hostapd/ctrl_{sap_interface} status"
+        get_sap_interface_status = f"hostapd_cli -p /data/vendor/wifi/hostapd/ctrl -i {sap_interface} status"
         out_sap_interface_status = ad.adb.shell(get_sap_interface_status)
         out_sap_interface_status = dict(re.findall(r'(\S+)=(".*?"|\S+)', out_sap_interface_status))
         return out_sap_interface_status

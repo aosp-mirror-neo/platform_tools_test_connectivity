@@ -124,9 +124,8 @@ def extract_sub_dict(full_dict, fields):
         (field, full_dict[field]) for field in fields)
     return sub_dict
 
-def write_antenna_tune_code(dut, tune_code):
+def write_antenna_tune_code(dut, tune_code, readback_check = True):
     flag_tune_code_forcing_on = 0
-    # Use AT Command file to enable tune code forcing 
     for n_enable in range(5):
         logging.debug('{}-th Enabling modem test mode'.format(n_enable))
         try:
@@ -153,22 +152,27 @@ def write_antenna_tune_code(dut, tune_code):
     logging.debug('Write Tune Code: {}'.format("modem_cmd raw " + tune_code['tune_code_cmd']))
     flag_tc_reg_correct = True
     # Check tune code register values
-    for tune_code_register_key in tune_code['tune_code_registers'].keys():
-        try:
-            at_tc_reg_output = dut.adb.shell("modem_cmd raw AT+MIPIREAD={}".format(tune_code_register_key))
-            time.sleep(SHORT_SLEEP)
-        except:
-            pass
-        if "+MIPIREAD:"+tune_code['tune_code_registers'][tune_code_register_key].lower() in at_tc_reg_output:
-            logging.info('Forced tune code register {} value matches expectation: {}'.format(tune_code_register_key, tune_code['tune_code_registers'][tune_code_register_key]))
+    if readback_check:
+        # Check tune code register values
+        for tune_code_register_key in tune_code['tune_code_registers'].keys():
+            try:
+                at_tc_reg_output = dut.adb.shell("modem_cmd raw AT+MIPIREAD={}".format(tune_code_register_key))
+                time.sleep(SHORT_SLEEP)
+            except:
+                pass
+            if "+MIPIREAD:"+tune_code['tune_code_registers'][tune_code_register_key].lower() in at_tc_reg_output:
+                logging.info('Forced tune code register {} value matches expectation: {}'.format(tune_code_register_key, tune_code['tune_code_registers'][tune_code_register_key]))
+            else:
+                logging.warning('Expected tune code register {} value: {}'.format(tune_code_register_key, tune_code['tune_code_registers'][tune_code_register_key]))
+                logging.warning('tune code register value is set to {}'.format(at_tc_reg_output))
+                flag_tc_reg_correct = False
+        if flag_tc_reg_correct:
+            return True
         else:
-            logging.warning('Expected tune code register {} value: {}'.format(tune_code_register_key, tune_code['tune_code_registers'][tune_code_register_key]))
-            logging.warning('tune code register value is set to {}'.format(at_tc_reg_output))
-            flag_tc_reg_correct = False
-    if flag_tc_reg_correct:
-        return True
+            raise RuntimeError("Enable modem test mode SUCCESSFUL, but register values NOT correct")
     else:
-        raise RuntimeError("Enable modem test mode SUCCESSFUL, but register values NOT correct")
+        logging.info('Tune code validation skipped.')
+        return True
 
 # Miscellaneous Wifi Utilities
 def check_skip_conditions(testcase_params, dut, access_point,
@@ -696,6 +700,7 @@ def get_connected_rssi(dut,
         all reported RSSI values (signal_poll, per chain, etc.) and their
         statistics
     """
+    pass
 
 
 @nonblocking
@@ -715,6 +720,7 @@ def get_scan_rssi(dut, tracked_bssids, num_measurements=1):
         scan_rssi: dict containing the measurement results as well as the
         statistics of the scan RSSI for all BSSIDs in tracked_bssids
     """
+    pass
 
 
 @detect_wifi_decorator
@@ -725,11 +731,13 @@ def get_sw_signature(dut):
         bdf_signature: signature consisting of last three digits of bdf cksums
         fw_signature: floating point firmware version, i.e., major.minor
     """
+    pass
 
 
 @detect_wifi_decorator
 def get_country_code(dut):
     """Function that returns the current wifi country code."""
+    pass
 
 
 @detect_wifi_decorator
@@ -744,16 +752,19 @@ def push_config(dut, config_file):
         dut: dut to push bdf file to
         config_file: path to bdf_file to push
     """
+    pass
 
 
 @detect_wifi_decorator
 def start_wifi_logging(dut):
     """Function to start collecting wifi-related logs"""
+    pass
 
 
 @detect_wifi_decorator
 def stop_wifi_logging(dut):
     """Function to start collecting wifi-related logs"""
+    pass
 
 
 @detect_wifi_decorator
@@ -765,16 +776,19 @@ def push_firmware(dut, firmware_files):
         firmware_files: path to wlanmdsp.mbn file
         datamsc_file: path to Data.msc file
     """
+    pass
 
 
 @detect_wifi_decorator
 def disable_beamforming(dut):
     """Function to disable beamforming."""
+    pass
 
 
 @detect_wifi_decorator
 def set_nss_capability(dut, nss):
     """Function to set number of spatial streams supported."""
+    pass
 
 
 @detect_wifi_decorator
@@ -785,6 +799,7 @@ def set_chain_mask(dut, chain_mask):
         dut: android device
         chain_mask: desired chain mask in [0, 1, '2x2']
     """
+    pass
 
 
 # Link layer stats utilities
