@@ -945,11 +945,10 @@ class RangingLink():
             ranging_results['raw_results'].append(result)
             if verbose:
                 logging.info(result)
-        ranging_results['compiled_results']['distance'] = [x['avg_dist'] for x in ranging_results['raw_results']]
-        ranging_results['compiled_results']['std_dev'] = [x['std_deviation'] for x in ranging_results['raw_results']]
-        ranging_results['compiled_results']['rtt'] = [x['rtt'] for x in ranging_results['raw_results']]
-        ranging_results['compiled_results']['rssi'] = [x['rssi'] for x in ranging_results['raw_results']]
-
+        ranging_results['compiled_results']['distance'] = [x['avg_dist'] for x in ranging_results['raw_results'] if abs(x['avg_dist']) > 0.01]
+        ranging_results['compiled_results']['std_dev'] = [x['std_deviation'] for x in ranging_results['raw_results'] if abs(x['avg_dist']) > 0.01]
+        ranging_results['compiled_results']['rtt'] = [x['rtt'] for x in ranging_results['raw_results'] if abs(x['avg_dist']) > 0.01]
+        ranging_results['compiled_results']['rssi'] = [x['rssi'] for x in ranging_results['raw_results'] if abs(x['avg_dist']) > 0.01]
         ranging_results['summary']['avg_distance'] = numpy.mean(ranging_results['compiled_results']['distance'])
         ranging_results['summary']['std_dev_distance'] = numpy.std(ranging_results['compiled_results']['distance'])
         ranging_results['summary']['avg_rtt'] = numpy.mean(ranging_results['compiled_results']['rtt'])

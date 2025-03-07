@@ -309,10 +309,16 @@ class BokehFigure():
             'axis_label_size']
         self.plot.yaxis.major_label_text_font_size = self.fig_property[
             'axis_tick_label_size']
-        self.plot.y_range = bokeh.models.DataRange1d(names=['default'])
+        default_y_range_renderers = [renderer for renderer in self.plot.renderers if renderer.y_range_name == 'default']
+        self.plot.y_range = bokeh.models.DataRange1d(name='default',
+                                                     renderers = default_y_range_renderers)
         if two_axes and 'secondary' not in self.plot.extra_y_ranges:
+            secondary_y_range_renderers = [renderer for renderer in self.plot.renderers if
+                                         renderer.y_range_name == 'secondary']
+
             self.plot.extra_y_ranges = {
-                'secondary': bokeh.models.DataRange1d(names=['secondary'])
+                'secondary': bokeh.models.DataRange1d(name='secondary',
+                                                      renderers=secondary_y_range_renderers)
             }
             self.plot.add_layout(
                 bokeh.models.LinearAxis(
