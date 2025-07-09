@@ -37,7 +37,6 @@ WAIT_AFTER_SOFTAP_RESUME = 10
 
 
 class WifiSoftApTest(WifiBaseTest):
-    """Add a comment to test access."""
 
     def setup_class(self):
         """It will setup the required dependencies from config file and configure
