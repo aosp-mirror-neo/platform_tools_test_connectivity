@@ -17,11 +17,9 @@
 import collections
 import itertools
 import json
-import logging
 import numpy
 import pandas
 import os
-import time
 from acts import asserts
 from acts import base_test
 from acts import context
@@ -29,11 +27,14 @@ from acts import utils
 from acts.metrics.loggers.blackbox import BlackboxMappedMetricLogger
 from acts_contrib.test_utils.wifi import delay_line
 from acts_contrib.test_utils.wifi import phase_shifter
+from acts_contrib.test_utils.wifi import channel_emulator
 from acts_contrib.test_utils.wifi import wifi_performance_test_utils as wputils
 from acts_contrib.test_utils.wifi import wifi_retail_ap as retail_ap
 from acts_contrib.test_utils.wifi import wifi_test_utils as wutils
 from functools import partial
 from matplotlib import pyplot
+from acts_contrib.test_utils.wifi.wifi_performance_test_utils.bokeh_figure import BokehFigure
+
 
 
 class WifiRangingTest(base_test.BaseTestClass):
@@ -308,6 +309,265 @@ class WifiRanging_OneSidedRtt_Test(WifiRangingTest):
         self.tests = self.generate_test_cases(ranging_method = '11mc_one_sided')
 
 class WifiRanging_11az_Test(WifiRangingTest):
+    def __init__(self, controllers):
+        super().__init__(controllers)
+        self.tests = self.generate_test_cases(ranging_method = '11az')
+
+
+
+class WifiRangingFadingTest(base_test.BaseTestClass):
+    """Class to test Wifi ranging.
+
+    This class implements Wifi ranging in a conducted setup with programmable
+    channel emulator. The class sets up the instruments, configures them, and characterizes
+    ranging performance over different multipath profiles.
+    """
+
+    def __init__(self, controllers):
+        base_test.BaseTestClass.__init__(self, controllers)
+
+    def setup_class(self):
+        """Initializes common test hardware and parameters.
+
+        This function initializes hardware and compiles parameters that are
+        common to all tests in this class.
+        """
+        self.duts = self.android_devices
+        req_params = [
+            'testbed_params', 'ranging_fading_test_params'
+        ]
+        opt_params = []
+        self.unpack_userparams(req_params, opt_params)
+        self.testclass_params = self.ranging_fading_test_params
+
+        # Turn Wifi On
+        for dev in self.android_devices:
+            if self.testclass_params.get('airplane_mode', 0):
+                self.log.info('Turning on airplane mode.')
+                asserts.assert_true(utils.force_airplane_mode(dev, True),
+                                    'Can not turn on airplane mode.')
+            wutils.reset_wifi(dev)
+            wutils.wifi_toggle_state(dev, True)
+
+        self.emulator, self.replace_attenuator, self.emul_gain = self.get_emulator_instrument()
+
+        if self.emulator:
+            if self.emulator_active:
+                self.emulator.connect()
+
+        self.emulator.set_input_power([5, 5])
+        self.correlation_map = {'non': None,
+                           'med': 'LTE_2x2_Medium',
+                           'high': 'LTE_2x2_High'}
+
+        self.AVAILABLE_FADING_MODELS = {'A': 'WLAN_TGn_A_NLOS',
+                                   'B': 'WLAN_TGax_B_NLOS_80M',
+                                   'C': 'WLAN_TGax_C_NLOS_80M_PR',
+                                   'D': 'WLAN_TGax_D_NLOS_80M_PR',
+                                   'E': 'WLAN_TGax_E_NLOS_80M_PR',
+                                   'F': 'WLAN_TGax_F_NLOS_NFL__80M_PR',
+                                   'F-1': 'WLAN_TGax_F_NLOS_NFL_80M_1',
+                                   'F-2': 'WLAN_TGax_F_NLOS_NFL_80M_2',
+                                   'F-nospike': 'WLAN_TGax_F_NLOS_NFL_No_Spike',
+                                   'Bypass-SISO': 'SISO',
+                                   'Bypass-BUTLER': 'BUTLER',
+                                   'delay1_loss3': 'WLAN_TGax_D_NLOS_80M_PR_Delay_1_Loss2nd_3'}
+
+        self.testclass_results = {}
+
+    def teardown_test(self):
+        self.process_testcase_result(self.testclass_results[self.current_test_name])
+
+    def teardown_class(self):
+        # Turn WiFi OFF
+        if hasattr(self, 'access_point'):
+            self.access_point.teardown()
+        for dev in self.android_devices:
+            wutils.wifi_toggle_state(dev, False)
+            dev.go_to_sleep()
+        if self.emulator and self.emulator_active:
+            if self.replace_attenuator:
+                self.emulator.set_attenuation([-self.emul_gain]*4)
+            self.emulator.teardown()
+
+    def get_emulator_instrument(self):
+        emulators = None
+        if 'Emulator' in self.controller_configs:
+            emulator_config = self.controller_configs['Emulator']
+            emulators = channel_emulator.create(emulator_config)
+
+        self.emulator_active, replace_attenuator = False, False
+        emulator = None
+        emulator_gain = 0.
+        if emulators:
+            emulator = emulators[0]
+            if emulator_config[0]['Active'] == 'True':
+                self.emulator_active = True
+            if emulator_config[0]['ReplaceAttenuator'] == 'True':
+                replace_attenuator = self.emulator_active and True
+
+            if 'Gain' in emulator_config[0]:
+                emulator_gain = float(emulator_config[0]['Gain'])
+
+        return emulator, replace_attenuator, emulator_gain
+    def _test_ranging(self, testcase_params):
+        testcase_params = self.compile_test_params(testcase_params)
+        if testcase_params['channel'] in wutils.WifiEnums.channel_5G_to_freq:
+            center_frequency = wutils.WifiEnums.channel_5G_to_freq[testcase_params['channel']]
+            self.log.info('Setting channel emulator frequency to {}'.format(center_frequency))
+            self.emulator.set_frequency([center_frequency, center_frequency])
+
+        self.emulator.set_attenuation([testcase_params['attenuation_sweep'][0]- self.emul_gain,
+                                       testcase_params['attenuation_sweep'][0]- self.emul_gain])
+        fading_model_name = self.AVAILABLE_FADING_MODELS[testcase_params['fading_model']]
+        if fading_model_name in ['SISO', 'BUTLER']:
+            self.emulator.channel_bypass_mode(channel_index=1, enable=True)
+            self.emulator.set_bypass_type(channel_index=1, bypass_type=fading_model_name)
+        else:
+            self.emulator.set_propagation_model(propagation_model=fading_model_name)
+            self.emulator.set_fading_spectrum_shape(1, [self.testclass_params['doppler_spectrum']] * 24)
+
+        self.emulator.play()
+
+        ranging_link = wputils.brcm_utils.RangingLink(self.duts[0], self.duts[1])
+        ranging_link.setup_ranging_link(testcase_params['channel'],
+                                        testcase_params['bandwidth'],
+                                        self.testclass_params['associate_initiator'],
+                                        testcase_params['ranging_method'])
+
+
+        ranging_sweep_results = collections.OrderedDict()
+
+
+        for doppler, attenuation in itertools.product(testcase_params['doppler_sweep'],
+                                                      testcase_params['attenuation_sweep']
+                                                      ):
+            ranging_sweep_results.setdefault(doppler, collections.OrderedDict())
+            self.emulator.set_doppler_frequency(1, doppler=[doppler]*24)
+            self.emulator.set_attenuation([attenuation - self.emul_gain, attenuation - self.emul_gain])
+            ranging_sweep_results[doppler][attenuation] = ranging_link.measure_range(self.testclass_params['ranging_measurements'],
+                                                    testcase_params['channel'],
+                                                    testcase_params['bandwidth'],
+                                                    no_meas_frames=self.testclass_params['ftm_exchanges'],
+                                                    ranging_method=testcase_params['ranging_method'])
+
+        ranging_link.teardown_ranging_link()
+        self.emulator.stop()
+        self.emulator.set_attenuation([testcase_params['attenuation_sweep'][0]-self.emul_gain,
+                                       testcase_params['attenuation_sweep'][0]-self.emul_gain])
+        test_result = {}
+        test_result['testcase_params']=testcase_params
+        test_result['ranging_sweep_results'] = ranging_sweep_results
+        self.testclass_results[self.current_test_name] = test_result
+
+    def compute_cdf_stats(self, data, percentile_low=5, percentile_high=95):
+        x, CDF_counts = numpy.unique(data, return_counts=True)
+        y = numpy.cumsum(CDF_counts) / numpy.sum(CDF_counts)
+        percentile_high_value = min(x[y > percentile_high/100])
+        percentile_low_value = max(x[y < percentile_low/100]) if min(y) < percentile_low/100 else x[1]
+        spread = percentile_high_value - percentile_low_value
+        return x, y, spread
+    def process_testcase_result(self, test_result):
+        results_file_path = os.path.join(
+            context.get_current_context().get_full_output_path(),
+            '{}.json'.format(self.current_test_name))
+        with open(results_file_path, 'w') as results_file:
+            json.dump(wputils.serialize_dict(test_result),
+                      results_file,
+                      indent=4)
+
+        figure_distance = BokehFigure(title='Ranging Performance',
+                                      x_label='Estimated Distance (m)',
+                                      primary_y_label='Prob(Est. Dist<x)',
+                                      legend_location='bottom_right')
+        figure_distance_per_config = BokehFigure(title='Ranging Performance',
+                                      x_label='Estimated Distance (m)',
+                                      primary_y_label='Prob(Est. Dist<x)',
+                                      legend_location='bottom_right')
+
+        for curr_doppler in test_result["ranging_sweep_results"]:
+            measurements = []
+            for attenuation in test_result["ranging_sweep_results"][curr_doppler]:
+                current_results = test_result["ranging_sweep_results"][curr_doppler][attenuation]["compiled_results"]['distance']
+                x, y, spread = self.compute_cdf_stats(current_results, 5, 95)
+                figure_distance_per_config.add_line(x_data=x, y_data=y,
+                                         legend="Doppler: {}Hz, Att: {}dB".format(curr_doppler, attenuation) + ' (5/95 Spread: {:.1f})'.format(
+                                             spread)
+                                         )
+                measurements.extend(current_results)
+            x,y,spread = self.compute_cdf_stats(measurements, 5, 95)
+            figure_distance.add_line(x_data=x, y_data=y,
+                                  legend="Doppler {} Hz".format(curr_doppler) + ' (5/95 Spread: {:.1f})'.format(spread)
+                                  )
+        figure_distance.generate_figure()
+        results_file_path = os.path.join(
+            context.get_current_context().get_full_output_path(),
+            '{}.html'.format(test_result['testcase_params']['fading_model']))
+        figure_distance.save_figure(results_file_path)
+
+        figure_distance_per_config.generate_figure()
+        results_file_path = os.path.join(
+            context.get_current_context().get_full_output_path(),
+            '{}_per_config.html'.format(test_result['testcase_params']['fading_model']))
+        figure_distance_per_config.save_figure(results_file_path)
+
+    def compile_test_params(self, testcase_params):
+        num_atten_steps = int(
+            (self.testclass_params['attenuation_sweep_params']['stop'] - self.testclass_params['attenuation_sweep_params']['start']) /
+            self.testclass_params['attenuation_sweep_params']['step'])
+        testcase_params['attenuation_sweep'] = [
+            self.testclass_params['attenuation_sweep_params']['start'] + x * self.testclass_params['attenuation_sweep_params']['step']
+            for x in range(0, num_atten_steps)
+        ]
+        if 'doppler_sweep_params' in self.testclass_params:
+            num_doppler_steps = int(
+                (self.testclass_params['doppler_sweep_params']['stop'] - self.testclass_params['doppler_sweep_params']['start']) /
+                self.testclass_params['doppler_sweep_params']['step'])
+            testcase_params['doppler_sweep'] = [
+                self.testclass_params['doppler_sweep_params']['start'] + x * self.testclass_params['doppler_sweep_params']['step']
+                for x in range(0, num_doppler_steps)
+            ]
+        else:
+            testcase_params['doppler_sweep']=[None]
+        return testcase_params
+
+
+    def generate_test_cases(self, ranging_method = '11mc'):
+        """Function that auto-generates test cases for a test class."""
+        test_cases = []
+        test_configs = [{'channel': 6, 'bandwidth': 20},
+                        {'channel': 36, 'bandwidth': 20},
+                        {'channel': 36, 'bandwidth': 40},
+                        {'channel': 36, 'bandwidth': 80},
+                        {'channel': 36, 'bandwidth': 160},
+                        {'channel': 149, 'bandwidth': 20},
+                        {'channel': 149, 'bandwidth': 40},
+                        {'channel': 149, 'bandwidth': 80}]
+
+        fading_model_vector = ['Bypass-SISO','Bypass-BUTLER', 'A', 'C', 'D', 'E', 'F', 'F-nospike']
+        correlation_vector = ['non', 'med', 'high']
+
+        for test_config, fading_model, correlation in itertools.product(test_configs, fading_model_vector, correlation_vector):
+            test_name = 'test_ranging_fading_ch{}_bw{}_{}_{}'.format(
+                test_config['channel'], test_config['bandwidth'], fading_model, correlation)
+            test_params = collections.OrderedDict(
+                channel=test_config['channel'],
+                bandwidth=test_config['bandwidth'],
+                fading_model=fading_model,
+                correlation=correlation,
+                ranging_method=ranging_method
+            )
+            setattr(self, test_name, partial(self._test_ranging, test_params))
+            test_cases.append(test_name)
+        print(test_cases)
+        return test_cases
+
+class WifiRangingFading_11mc_Test(WifiRangingFadingTest):
+    def __init__(self, controllers):
+        super().__init__(controllers)
+        self.tests = self.generate_test_cases(ranging_method = '11mc')
+
+class WifiRangingFading_11az_Test(WifiRangingFadingTest):
     def __init__(self, controllers):
         super().__init__(controllers)
         self.tests = self.generate_test_cases(ranging_method = '11az')
