@@ -2830,7 +2830,7 @@ def set_softap_channel(dut, ap_iface='wlan1', cs_count=10, channel=2462):
         cs_count: how many beacon frames before switch channel, default = 10
         channel: a wifi channel.
     """
-    chan_switch_cmd = 'hostapd_cli -i {} chan_switch {} {}'
+    chan_switch_cmd = 'hostapd_cli -p /data/vendor/wifi/hostapd/ctrl_{} chan_switch {} {}'
     chan_switch_cmd_show = chan_switch_cmd.format(ap_iface, cs_count, channel)
     dut.log.info('adb shell {}'.format(chan_switch_cmd_show))
     chan_switch_result = dut.adb.shell(
