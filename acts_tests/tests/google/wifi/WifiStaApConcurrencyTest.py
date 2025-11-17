@@ -333,7 +333,7 @@ class WifiStaApConcurrencyTest(WifiBaseTest):
         sap_interface = "wlan1"
         if self.dut.model in self.dbs_supported_models:
             sap_interface = "wlan2"
-        get_sap_interface_status = f"hostapd_cli -p /data/vendor/wifi/hostapd/ctrl -i {sap_interface} status"
+        get_sap_interface_status = f"hostapd_cli -p /data/vendor/wifi/hostapd/ctrl_{sap_interface} status"
         out_sap_interface_status = ad.adb.shell(get_sap_interface_status)
         out_sap_interface_status = dict(re.findall(r'(\S+)=(".*?"|\S+)', out_sap_interface_status))
         return out_sap_interface_status
@@ -481,7 +481,7 @@ class WifiStaApConcurrencyTest(WifiBaseTest):
         and switch SoftAp to 5G."""
         self.configure_ap(channel_5g=WIFI_NETWORK_AP_CHANNEL_5G)
         self.connect_to_wifi_network_and_start_softap(
-            self.open_2g, WIFI_CONFIG_APBAND_2G)
+            self.open_5g, WIFI_CONFIG_APBAND_2G)
         self.softap_change_band(self.dut)
 
     @test_tracker_info(uuid="d549a18e-73d9-45e7-b4df-b59446c4b833")

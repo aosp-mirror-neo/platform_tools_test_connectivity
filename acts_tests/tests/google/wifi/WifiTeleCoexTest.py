@@ -3,7 +3,7 @@
 import time
 
 import acts.base_test
-import acts_contrib.test_utils.tel.tel_wifi_utils
+import acts_contrib.test_utils.tel.tel_wifi_utils as tel_wifi_utils
 import acts_contrib.test_utils.wifi.wifi_test_utils as wifi_utils
 import acts_contrib.test_utils.tel.tel_test_utils as tele_utils
 import acts_contrib.test_utils.tel.tel_mms_utils as mms_utils

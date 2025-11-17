@@ -828,7 +828,7 @@ class WifiBaseTest(BaseTestClass):
         self.log.debug("Cleanup AP")
         if not self._kill_processes(ap, 'hostapd') or \
             not self._kill_processes(ap, 'dhcpd'):
-            raise ("Failed to cleanup AP")
+                raise Exception("Failed to cleanup AP")
 
         ap.__init__(self.user_params['AccessPoint'][count])
 
