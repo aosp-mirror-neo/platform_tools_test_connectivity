@@ -177,6 +177,9 @@ class WifiStressTest(WifiBaseTest):
         video_played = False
         for count in range(2):
             ad.unlock_screen()
+            ad.adb.shell(
+                    "pm grant com.google.android.youtube"
+                    " android.permission.POST_NOTIFICATIONS")
             ad.adb.shell('am start -a android.intent.action.VIEW -d "%s"' %
                          url)
             if tutils.wait_for_state(ad.droid.audioIsMusicActive, True, 15, 1):
